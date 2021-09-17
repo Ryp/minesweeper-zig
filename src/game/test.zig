@@ -10,19 +10,18 @@ test "Critical path" {
     const mine_count: u16 = 2;
     const start_x: u16 = 1;
     const start_y: u16 = 1;
+
     var rng = std.rand.DefaultPrng.init(0x42424242); // FIXME
 
-    var board = try minesweeper.create_board(extent_x, extent_y);
-    defer minesweeper.destroy_board(board);
+    var game_state = try minesweeper.create_game_state(extent_x, extent_y, mine_count, &rng.random);
+    defer minesweeper.destroy_game_state(&game_state);
 
-    minesweeper.fill_mines(board, start_x, start_y, mine_count, &rng.random);
+    minesweeper.uncover(&game_state, start_x, start_y);
 
-    var result = minesweeper.uncover(board, start_x, start_y);
+    try expectEqual(game_state.last_move_result, minesweeper.UncoverResult.Continue);
+    try expectEqual(game_state.board[start_x][start_y].is_covered, false);
 
-    try expectEqual(result, minesweeper.UncoverResult.Continue);
-    try expectEqual(board[start_x][start_y].is_covered, false);
+    minesweeper.uncover(&game_state, 0, 0);
 
-    result = minesweeper.uncover(board, 0, 0);
-
-    try expect(result != minesweeper.UncoverResult.Continue);
+    try expect(game_state.last_move_result != minesweeper.UncoverResult.Continue);
 }

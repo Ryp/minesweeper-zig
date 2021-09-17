@@ -1,8 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-//const chip8 = @import("chip8/chip8.zig");
-//const sdl2 = @import("sdl2/sdl2_backend.zig");
+const sdl2 = @import("sdl2/sdl2_backend.zig");
 const minesweeper = @import("game/minesweeper.zig");
 
 pub fn main() !void {
@@ -17,14 +16,11 @@ pub fn main() !void {
     const extent_x = try std.fmt.parseUnsigned(u16, args[1], 0);
     const extent_y = try std.fmt.parseUnsigned(u16, args[2], 0);
     const mine_count = try std.fmt.parseUnsigned(u16, args[3], 0);
-    const start_x: u16 = 1;
-    const start_y: u16 = 1;
+
     var rng = std.rand.DefaultPrng.init(0x42424242); // FIXME
 
-    var board = try minesweeper.create_board(extent_x, extent_y);
-    defer minesweeper.destroy_board(board);
+    var game_state = try minesweeper.create_game_state(extent_x, extent_y, mine_count, &rng.random);
+    defer minesweeper.destroy_game_state(&game_state);
 
-    minesweeper.fill_mines(board, start_x, start_y, mine_count, &rng.random);
-
-    //    try sdl2.execute_main_loop(board, config);
+    try sdl2.execute_main_loop(&game_state);
 }
