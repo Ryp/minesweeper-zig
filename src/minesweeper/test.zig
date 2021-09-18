@@ -40,4 +40,6 @@ test "Big uncover" {
     defer minesweeper.destroy_game_state(&game_state);
 
     minesweeper.uncover(&game_state, .{ .x = start_x, .y = start_y });
+
+    try expect(game_state.event_history[0].type == minesweeper.GameEventType.DiscoverMany);
 }
