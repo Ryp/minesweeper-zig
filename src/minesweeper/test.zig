@@ -18,12 +18,13 @@ test "Critical path" {
 
     minesweeper.uncover(&game_state, .{ .x = start_x, .y = start_y });
 
-    try expectEqual(game_state.last_move_result, minesweeper.UncoverResult.Continue);
+    try expectEqual(game_state.is_ended, false);
     try expectEqual(game_state.board[start_x][start_y].is_covered, false);
 
     minesweeper.uncover(&game_state, .{ .x = 0, .y = 0 });
 
-    try expect(game_state.last_move_result != minesweeper.UncoverResult.Continue);
+    try expectEqual(game_state.is_ended, true);
+    try expectEqual(game_state.board[0][0].is_covered, false);
 }
 
 test "Big uncover" {

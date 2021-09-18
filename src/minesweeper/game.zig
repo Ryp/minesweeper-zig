@@ -1,6 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+usingnamespace @import("event.zig");
+
 const MineSweeperBoardExtentMinX: u16 = 2;
 const MineSweeperBoardExtentMinY: u16 = 2;
 const MineSweeperBoardExtentMaxX: u16 = 1024;
@@ -11,33 +13,9 @@ const i8_2 = struct {
     y: i8,
 };
 
-const u16_2 = struct {
+pub const u16_2 = struct {
     x: u16,
     y: u16,
-};
-
-pub const DiscoverSingleEvent = struct {
-    location: u16_2,
-};
-
-pub const DiscoverManyEvent = struct {
-    location: u16_2,
-    children: []u16_2,
-};
-
-pub const GameEventType = enum {
-    DiscoverSingle,
-    DiscoverMany,
-};
-
-pub const GameEventUnion = union {
-    discover_single: DiscoverSingleEvent,
-    discover_many: DiscoverManyEvent,
-};
-
-pub const GameEvent = struct {
-    type: GameEventType,
-    event: GameEventUnion,
 };
 
 pub const CellState = struct {
@@ -47,16 +25,14 @@ pub const CellState = struct {
     mine_neighbors: u4,
 };
 
-pub const UncoverResult = enum { Continue, Win, Lose };
-
 pub const GameState = struct {
     extent_x: u16,
     extent_y: u16,
     mine_count: u16,
     board: [][]CellState,
-    last_move_result: UncoverResult,
     rng: *std.rand.Random,
     is_first_move: bool,
+    is_ended: bool,
     children_array: []u16_2,
     children_array_index: usize,
     event_history: []GameEvent,
@@ -78,7 +54,7 @@ pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *st
     game.mine_count = mine_count;
     game.rng = rng;
     game.is_first_move = true;
-    game.last_move_result = UncoverResult.Continue;
+    game.is_ended = false;
     game.children_array_index = 0;
     game.event_history_index = 0;
 
@@ -284,8 +260,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         game.is_first_move = false;
     }
 
-    // Game has ended?
-    if (game.last_move_result != UncoverResult.Continue)
+    if (game.is_ended)
         return;
 
     var uncovered_cell = &game.board[uncover_pos.x][uncover_pos.y];
@@ -304,7 +279,10 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         const end_children = game.children_array_index;
 
         append_discover_many_event(game, uncover_pos, game.children_array[start_children..end_children]);
-    } else uncovered_cell.is_covered = false;
+    } else {
+        uncovered_cell.is_covered = false;
+        append_discover_single_event(game, uncover_pos);
+    }
 
     // Did we lose?
     if (uncovered_cell.is_mine) {
@@ -316,7 +294,8 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
             }
         }
 
-        game.last_move_result = UncoverResult.Lose;
+        game.is_ended = true;
+        append_game_end_event(game, GameResult.Lose);
         return;
     }
 
@@ -333,18 +312,17 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
             }
         }
 
-        game.last_move_result = UncoverResult.Win;
+        game.is_ended = true;
+        append_game_end_event(game, GameResult.Win);
         return;
     }
-
-    game.last_move_result = UncoverResult.Continue;
 }
 
 pub fn toggle_flag(game: *GameState, x: u16, y: u16) void {
     assert(x < game.extent_x);
     assert(y < game.extent_y);
 
-    if (game.last_move_result != UncoverResult.Continue)
+    if (game.is_ended)
         return;
 
     if (game.is_first_move)
@@ -356,32 +334,4 @@ pub fn toggle_flag(game: *GameState, x: u16, y: u16) void {
         return;
 
     cell.is_flagged = !cell.is_flagged;
-}
-
-pub fn allocate_new_event(game: *GameState) *GameEvent {
-    const new_event = &game.event_history[game.event_history_index];
-    game.event_history_index += 1;
-
-    return new_event;
-}
-
-pub fn append_discover_single_event(game: *GameState, location: u16_2) void {
-    var new_event = allocate_new_event(game);
-    new_event.type = GameEventType.DiscoverSingle;
-    new_event.event = GameEventUnion{
-        .discover_single = DiscoverSingleEvent{
-            .location = location,
-        },
-    };
-}
-
-pub fn append_discover_many_event(game: *GameState, location: u16_2, children: []u16_2) void {
-    var new_event = allocate_new_event(game);
-    new_event.type = GameEventType.DiscoverMany;
-    new_event.event = GameEventUnion{
-        .discover_many = DiscoverManyEvent{
-            .location = location,
-            .children = children,
-        },
-    };
 }

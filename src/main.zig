@@ -2,7 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sdl2 = @import("sdl2/sdl2_backend.zig");
-const minesweeper = @import("minesweeper/game.zig");
+const minesweeper = @import("minesweeper/minesweeper.zig");
 
 pub fn main() !void {
     var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
