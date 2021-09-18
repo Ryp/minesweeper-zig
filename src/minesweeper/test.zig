@@ -2,7 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
-const minesweeper = @import("minesweeper.zig");
+const minesweeper = @import("game.zig");
 
 test "Critical path" {
     const extent_x: u16 = 2;

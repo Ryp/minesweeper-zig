@@ -5,7 +5,7 @@ const c = @cImport({
     @cInclude("SDL2/SDL.h");
 });
 
-const minesweeper = @import("../game/minesweeper.zig");
+const minesweeper = @import("../minesweeper/game.zig");
 
 fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool) [2]u8 {
     if (cell.is_covered) {

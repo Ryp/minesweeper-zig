@@ -365,6 +365,16 @@ pub fn allocate_new_event(game: *GameState) *GameEvent {
     return new_event;
 }
 
+pub fn append_discover_single_event(game: *GameState, location: u16_2) void {
+    var new_event = allocate_new_event(game);
+    new_event.type = GameEventType.DiscoverSingle;
+    new_event.event = GameEventUnion{
+        .discover_single = DiscoverSingleEvent{
+            .location = location,
+        },
+    };
+}
+
 pub fn append_discover_many_event(game: *GameState, location: u16_2, children: []u16_2) void {
     var new_event = allocate_new_event(game);
     new_event.type = GameEventType.DiscoverMany;
