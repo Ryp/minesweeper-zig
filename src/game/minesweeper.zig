@@ -6,6 +6,40 @@ const MineSweeperBoardExtentMinY: u16 = 2;
 const MineSweeperBoardExtentMaxX: u16 = 1024;
 const MineSweeperBoardExtentMaxY: u16 = 1024;
 
+const i8_2 = struct {
+    x: i8,
+    y: i8,
+};
+
+const u16_2 = struct {
+    x: u16,
+    y: u16,
+};
+
+pub const DiscoverSingleEvent = struct {
+    location: u16_2,
+};
+
+pub const DiscoverManyEvent = struct {
+    location: u16_2,
+    children: []u16_2,
+};
+
+pub const GameEventType = enum {
+    DiscoverSingle,
+    DiscoverMany,
+};
+
+pub const GameEventUnion = union {
+    discover_single: DiscoverSingleEvent,
+    discover_many: DiscoverManyEvent,
+};
+
+pub const GameEvent = struct {
+    type: GameEventType,
+    event: GameEventUnion,
+};
+
 pub const CellState = struct {
     is_mine: bool,
     is_covered: bool,
@@ -23,6 +57,10 @@ pub const GameState = struct {
     last_move_result: UncoverResult,
     rng: *std.rand.Random,
     is_first_move: bool,
+    children_array: []u16_2,
+    children_array_index: usize,
+    event_history: []GameEvent,
+    event_history_index: usize,
 };
 
 // Creates blank board without mines
@@ -41,6 +79,8 @@ pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *st
     game.rng = rng;
     game.is_first_move = true;
     game.last_move_result = UncoverResult.Continue;
+    game.children_array_index = 0;
+    game.event_history_index = 0;
 
     const allocator: *std.mem.Allocator = std.heap.page_allocator;
 
@@ -61,12 +101,24 @@ pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *st
         }
     }
 
+    // Allocate array to hold children discovered in events
+    game.children_array = try allocator.alloc(u16_2, extent_x * extent_y);
+    errdefer allocator.free(game.children_array);
+
+    // Allocate array to hold children discovered in events
+    game.event_history = try allocator.alloc(GameEvent, extent_x * extent_y);
+    errdefer allocator.free(game.event_history);
+
     // Placement of mines is done on the first player input
     return game;
 }
 
 pub fn destroy_game_state(game: *GameState) void {
     const allocator: *std.mem.Allocator = std.heap.page_allocator;
+
+    allocator.free(game.event_history);
+
+    allocator.free(game.children_array);
 
     for (game.board) |column| {
         allocator.free(column);
@@ -106,11 +158,6 @@ pub fn debug_print(game: *GameState) !void {
         y += 1;
     }
 }
-
-const i8_2 = struct {
-    x: i8,
-    y: i8,
-};
 
 // Feed a blank but initialized board and it will dart throw mines at it until it has the right
 // number of mines.
@@ -175,10 +222,7 @@ pub fn is_board_won(board: [][]CellState) bool {
 }
 
 // Assumes the position to uncover is covered and has no neighbors
-pub fn uncover_zero_neighbors(board: [][]CellState, uncover_x: u16, uncover_y: u16) void {
-    const extent_x = @intCast(u16, board.len);
-    const extent_y = @intCast(u16, board[0].len);
-
+pub fn uncover_zero_neighbors(game: *GameState, uncover_x: u16, uncover_y: u16) void {
     var offset_table = [8]i8_2{
         i8_2{ .x = -1, .y = -1 },
         i8_2{ .x = -1, .y = 0 },
@@ -190,11 +234,14 @@ pub fn uncover_zero_neighbors(board: [][]CellState, uncover_x: u16, uncover_y: u
         i8_2{ .x = 1, .y = 1 },
     };
 
-    var cell = &board[uncover_x][uncover_y];
+    var cell = &game.board[uncover_x][uncover_y];
 
     assert(cell.mine_neighbors == 0);
 
     cell.is_covered = false;
+
+    game.children_array[game.children_array_index] = .{ .x = uncover_x, .y = uncover_y };
+    game.children_array_index += 1;
 
     for (offset_table) |offset| {
         const target_x = @intCast(i16, uncover_x) + offset.x;
@@ -203,18 +250,25 @@ pub fn uncover_zero_neighbors(board: [][]CellState, uncover_x: u16, uncover_y: u
         // Out of bounds
         if (target_x < 0 or target_y < 0)
             continue;
-        if (target_x >= extent_x or target_y >= extent_y)
+        if (target_x >= game.extent_x or target_y >= game.extent_y)
             continue;
 
         const utarget_x = @intCast(u16, target_x);
         const utarget_y = @intCast(u16, target_y);
 
-        var target_cell = &board[utarget_x][utarget_y];
+        var target_cell = &game.board[utarget_x][utarget_y];
 
-        if (target_cell.mine_neighbors == 0 and target_cell.is_covered)
-            uncover_zero_neighbors(board, utarget_x, utarget_y);
+        if (!target_cell.is_covered)
+            continue;
 
-        target_cell.is_covered = false;
+        if (target_cell.mine_neighbors > 0) {
+            target_cell.is_covered = false;
+
+            game.children_array[game.children_array_index] = .{ .x = utarget_x, .y = utarget_y };
+            game.children_array_index += 1;
+        } else {
+            uncover_zero_neighbors(game, utarget_x, utarget_y);
+        }
     }
 }
 
@@ -239,11 +293,16 @@ pub fn uncover(game: *GameState, uncover_x: u16, uncover_y: u16) void {
     }
 
     // Uncover cell
-    uncovered_cell.is_covered = false;
-
     if (uncovered_cell.mine_neighbors == 0) {
-        uncover_zero_neighbors(game.board, uncover_x, uncover_y);
-    }
+        // Create new event
+        const start_children = game.children_array_index;
+
+        uncover_zero_neighbors(game, uncover_x, uncover_y);
+
+        const end_children = game.children_array_index;
+
+        append_discover_many_event(game, .{ .x = uncover_x, .y = uncover_y }, game.children_array[start_children..end_children]);
+    } else uncovered_cell.is_covered = false;
 
     // Did we lose?
     if (uncovered_cell.is_mine) {
@@ -286,10 +345,31 @@ pub fn toggle_flag(game: *GameState, x: u16, y: u16) void {
     if (game.last_move_result != UncoverResult.Continue)
         return;
 
+    if (game.is_first_move)
+        return;
+
     var cell = &game.board[x][y];
 
     if (!cell.is_covered)
         return;
 
     cell.is_flagged = !cell.is_flagged;
+}
+
+pub fn allocate_new_event(game: *GameState) *GameEvent {
+    const new_event = &game.event_history[game.event_history_index];
+    game.event_history_index += 1;
+
+    return new_event;
+}
+
+pub fn append_discover_many_event(game: *GameState, location: u16_2, children: []u16_2) void {
+    var new_event = allocate_new_event(game);
+    new_event.type = GameEventType.DiscoverMany;
+    new_event.event = GameEventUnion{
+        .discover_many = DiscoverManyEvent{
+            .location = location,
+            .children = children,
+        },
+    };
 }
