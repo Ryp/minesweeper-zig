@@ -161,7 +161,7 @@ pub fn debug_print(game: *GameState) !void {
 
 // Feed a blank but initialized board and it will dart throw mines at it until it has the right
 // number of mines.
-pub fn fill_mines(game: *GameState, start_x: u16, start_y: u16) void {
+pub fn fill_mines(game: *GameState, start: u16_2) void {
     var neighbour_offset_table = [9]i8_2{
         i8_2{ .x = -1, .y = -1 },
         i8_2{ .x = -1, .y = 0 },
@@ -182,7 +182,7 @@ pub fn fill_mines(game: *GameState, start_x: u16, start_y: u16) void {
         const random_y = game.rng.uintLessThan(u16, game.extent_y);
 
         // Do not generate mines where the player starts
-        if (random_x == start_x and random_y == start_y)
+        if (random_x == start.x and random_y == start.y)
             continue;
 
         var random_cell = &game.board[random_x][random_y];
@@ -222,7 +222,7 @@ pub fn is_board_won(board: [][]CellState) bool {
 }
 
 // Assumes the position to uncover is covered and has no neighbors
-pub fn uncover_zero_neighbors(game: *GameState, uncover_x: u16, uncover_y: u16) void {
+pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     var offset_table = [8]i8_2{
         i8_2{ .x = -1, .y = -1 },
         i8_2{ .x = -1, .y = 0 },
@@ -234,18 +234,18 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_x: u16, uncover_y: u16) 
         i8_2{ .x = 1, .y = 1 },
     };
 
-    var cell = &game.board[uncover_x][uncover_y];
+    var cell = &game.board[uncover_pos.x][uncover_pos.y];
 
     assert(cell.mine_neighbors == 0);
 
     cell.is_covered = false;
 
-    game.children_array[game.children_array_index] = .{ .x = uncover_x, .y = uncover_y };
+    game.children_array[game.children_array_index] = uncover_pos;
     game.children_array_index += 1;
 
     for (offset_table) |offset| {
-        const target_x = @intCast(i16, uncover_x) + offset.x;
-        const target_y = @intCast(i16, uncover_y) + offset.y;
+        const target_x = @intCast(i16, uncover_pos.x) + offset.x;
+        const target_y = @intCast(i16, uncover_pos.y) + offset.y;
 
         // Out of bounds
         if (target_x < 0 or target_y < 0)
@@ -253,10 +253,12 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_x: u16, uncover_y: u16) 
         if (target_x >= game.extent_x or target_y >= game.extent_y)
             continue;
 
-        const utarget_x = @intCast(u16, target_x);
-        const utarget_y = @intCast(u16, target_y);
+        const utarget = u16_2{
+            .x = @intCast(u16, target_x),
+            .y = @intCast(u16, target_y),
+        };
 
-        var target_cell = &game.board[utarget_x][utarget_y];
+        var target_cell = &game.board[utarget.x][utarget.y];
 
         if (!target_cell.is_covered)
             continue;
@@ -264,21 +266,21 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_x: u16, uncover_y: u16) 
         if (target_cell.mine_neighbors > 0) {
             target_cell.is_covered = false;
 
-            game.children_array[game.children_array_index] = .{ .x = utarget_x, .y = utarget_y };
+            game.children_array[game.children_array_index] = utarget;
             game.children_array_index += 1;
         } else {
-            uncover_zero_neighbors(game, utarget_x, utarget_y);
+            uncover_zero_neighbors(game, utarget);
         }
     }
 }
 
 // Process an oncover events and propagates the state on the board.
-pub fn uncover(game: *GameState, uncover_x: u16, uncover_y: u16) void {
-    assert(uncover_x < game.extent_x);
-    assert(uncover_y < game.extent_y);
+pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
+    assert(uncover_pos.x < game.extent_x);
+    assert(uncover_pos.y < game.extent_y);
 
     if (game.is_first_move) {
-        fill_mines(game, uncover_x, uncover_y);
+        fill_mines(game, uncover_pos);
         game.is_first_move = false;
     }
 
@@ -286,7 +288,7 @@ pub fn uncover(game: *GameState, uncover_x: u16, uncover_y: u16) void {
     if (game.last_move_result != UncoverResult.Continue)
         return;
 
-    var uncovered_cell = &game.board[uncover_x][uncover_y];
+    var uncovered_cell = &game.board[uncover_pos.x][uncover_pos.y];
 
     if (!uncovered_cell.is_covered or uncovered_cell.is_flagged) {
         return; // Nothing to do!
@@ -297,11 +299,11 @@ pub fn uncover(game: *GameState, uncover_x: u16, uncover_y: u16) void {
         // Create new event
         const start_children = game.children_array_index;
 
-        uncover_zero_neighbors(game, uncover_x, uncover_y);
+        uncover_zero_neighbors(game, uncover_pos);
 
         const end_children = game.children_array_index;
 
-        append_discover_many_event(game, .{ .x = uncover_x, .y = uncover_y }, game.children_array[start_children..end_children]);
+        append_discover_many_event(game, uncover_pos, game.children_array[start_children..end_children]);
     } else uncovered_cell.is_covered = false;
 
     // Did we lose?

@@ -16,12 +16,12 @@ test "Critical path" {
     var game_state = try minesweeper.create_game_state(extent_x, extent_y, mine_count, &rng.random);
     defer minesweeper.destroy_game_state(&game_state);
 
-    minesweeper.uncover(&game_state, start_x, start_y);
+    minesweeper.uncover(&game_state, .{ .x = start_x, .y = start_y });
 
     try expectEqual(game_state.last_move_result, minesweeper.UncoverResult.Continue);
     try expectEqual(game_state.board[start_x][start_y].is_covered, false);
 
-    minesweeper.uncover(&game_state, 0, 0);
+    minesweeper.uncover(&game_state, .{ .x = 0, .y = 0 });
 
     try expect(game_state.last_move_result != minesweeper.UncoverResult.Continue);
 }
@@ -38,5 +38,5 @@ test "Big uncover" {
     var game_state = try minesweeper.create_game_state(extent_x, extent_y, mine_count, &rng.random);
     defer minesweeper.destroy_game_state(&game_state);
 
-    minesweeper.uncover(&game_state, start_x, start_y);
+    minesweeper.uncover(&game_state, .{ .x = start_x, .y = start_y });
 }

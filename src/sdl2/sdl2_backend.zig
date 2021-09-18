@@ -81,7 +81,7 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
                     const x = @intCast(u16, @divTrunc(sdlEvent.button.x, scale));
                     const y = @intCast(u16, @divTrunc(sdlEvent.button.y, scale));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        minesweeper.uncover(game_state, x, y);
+                        minesweeper.uncover(game_state, .{ .x = x, .y = y });
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
                         minesweeper.toggle_flag(game_state, x, y);
                     }
