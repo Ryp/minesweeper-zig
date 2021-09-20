@@ -41,6 +41,11 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
     };
     defer c.SDL_DestroyWindow(window);
 
+    if (c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1") == c.SDL_bool.SDL_FALSE) {
+        c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
+        return error.SDLInitializationFailed;
+    }
+
     const ren = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) orelse {
         c.SDL_Log("Unable to create renderer: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
