@@ -5,6 +5,7 @@ const sdl2 = @import("sdl2/sdl2_backend.zig");
 const minesweeper = @import("minesweeper/minesweeper.zig");
 
 pub fn main() !void {
+    // Parse arguments
     var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = &general_purpose_allocator.allocator;
 
@@ -17,8 +18,14 @@ pub fn main() !void {
     const extent_y = try std.fmt.parseUnsigned(u16, args[2], 0);
     const mine_count = try std.fmt.parseUnsigned(u16, args[3], 0);
 
-    var rng = std.rand.DefaultPrng.init(0x42424242); // FIXME
+    // Using the method from the docs to get a reasonably random seed
+    var buf: [8]u8 = undefined;
+    std.crypto.random.bytes(buf[0..]);
+    const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
 
+    var rng = std.rand.DefaultPrng.init(seed);
+
+    // Create game state
     var game_state = try minesweeper.create_game_state(extent_x, extent_y, mine_count, &rng.random);
     defer minesweeper.destroy_game_state(&game_state);
 
