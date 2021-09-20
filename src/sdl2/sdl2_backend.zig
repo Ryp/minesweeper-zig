@@ -97,16 +97,16 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
 
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
-        const mouse_button_state = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hover_x = @intCast(u16, @divTrunc(mouse_x, scale));
-        const hover_y = @intCast(u16, @divTrunc(mouse_y, scale));
+        _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
+        const hovered_cell_x = @intCast(u16, @divTrunc(mouse_x, scale));
+        const hovered_cell_y = @intCast(u16, @divTrunc(mouse_y, scale));
 
         // Render game
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board) |column, i| {
             for (column) |cell, j| {
-                const is_hovered = (i == hover_x) and (j == hover_y);
+                const is_hovered = (i == hovered_cell_x) and (j == hovered_cell_y);
 
                 const sprite_sheet_pos = get_tile_index(cell, is_hovered);
 
