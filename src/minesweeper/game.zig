@@ -304,8 +304,6 @@ pub fn is_board_won(board: [][]CellState) bool {
 }
 
 pub fn debug_print(game: *GameState) !void {
-    const stdout = std.io.getStdOut().writer();
-
     var y: u16 = 0;
     while (y < game.extent_y) {
         var x: u16 = 0;
