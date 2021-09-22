@@ -33,10 +33,12 @@ pub const GameState = struct {
     rng: *std.rand.Random,
     is_first_move: bool,
     is_ended: bool,
-    children_array: []u16_2,
-    children_array_index: usize,
+
+    // Storage for game events
     event_history: []GameEvent,
     event_history_index: usize,
+    children_array: []u16_2,
+    children_array_index: usize,
 };
 
 // Creates blank board without mines
@@ -77,13 +79,13 @@ pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *st
         }
     }
 
+    // Allocate array to hold events
+    game.event_history = try allocator.alloc(GameEvent, extent_x * extent_y);
+    errdefer allocator.free(game.event_history);
+
     // Allocate array to hold children discovered in events
     game.children_array = try allocator.alloc(u16_2, extent_x * extent_y);
     errdefer allocator.free(game.children_array);
-
-    // Allocate array to hold children discovered in events
-    game.event_history = try allocator.alloc(GameEvent, extent_x * extent_y);
-    errdefer allocator.free(game.event_history);
 
     // Placement of mines is done on the first player input
     return game;
@@ -92,9 +94,8 @@ pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *st
 pub fn destroy_game_state(game: *GameState) void {
     const allocator: *std.mem.Allocator = std.heap.page_allocator;
 
-    allocator.free(game.event_history);
-
     allocator.free(game.children_array);
+    allocator.free(game.event_history);
 
     for (game.board) |column| {
         allocator.free(column);
@@ -222,7 +223,8 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
     }
 }
 
-// Assumes the position to uncover is covered and has no neighbors
+// Discovers all cells adjacents to a zero-neighbor cell
+// Careful, this function is recursive.
 pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     var offset_table = [8]i8_2{
         i8_2{ .x = -1, .y = -1 },
@@ -279,10 +281,7 @@ pub fn toggle_flag(game: *GameState, x: u16, y: u16) void {
     assert(x < game.extent_x);
     assert(y < game.extent_y);
 
-    if (game.is_ended)
-        return;
-
-    if (game.is_first_move)
+    if (game.is_first_move or game.is_ended)
         return;
 
     var cell = &game.board[x][y];
