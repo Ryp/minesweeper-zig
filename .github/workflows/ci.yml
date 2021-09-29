@@ -15,7 +15,9 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: ${{ env.zig_version }}
-      - run: sudo apt-get install libsdl2-dev # Prevents us from running on all platforms
+      # Ubuntu-specific bit
+      - run: sudo apt-get update -qq
+      - run: sudo apt-get install -y libsdl2-dev
       - run: zig build
       - run: zig build test
 
