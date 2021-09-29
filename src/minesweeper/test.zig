@@ -43,5 +43,5 @@ test "Big uncover" {
 
     minesweeper.uncover(&game_state, .{ .x = start_x, .y = start_y });
 
-    try expect(game_state.event_history[0].type == minesweeper.GameEventType.DiscoverMany);
+    try expect(game_state.event_history[0] == minesweeper.GameEventTag.discover_many);
 }
