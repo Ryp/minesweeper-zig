@@ -88,7 +88,7 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
                         minesweeper.uncover(game_state, .{ .x = x, .y = y });
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
-                        minesweeper.toggle_flag(game_state, x, y);
+                        minesweeper.toggle_flag(game_state, .{ .x = x, .y = y });
                     }
                 },
                 else => {},

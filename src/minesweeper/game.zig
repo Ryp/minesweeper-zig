@@ -80,7 +80,9 @@ pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *st
     }
 
     // Allocate array to hold events
-    game.event_history = try allocator.alloc(GameEvent, extent_x * extent_y);
+    const max_events = extent_x * extent_y + 2000;
+
+    game.event_history = try allocator.alloc(GameEvent, max_events);
     errdefer allocator.free(game.event_history);
 
     // Allocate array to hold children discovered in events
@@ -119,8 +121,16 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
     var uncovered_cell = &game.board[uncover_pos.x][uncover_pos.y];
 
-    if (!uncovered_cell.is_covered or uncovered_cell.is_flagged) {
+    if (uncovered_cell.is_flagged) {
         return; // Nothing to do!
+    }
+
+    if (!uncovered_cell.is_covered) {
+        if (uncovered_cell.mine_neighbors > 0 and !uncovered_cell.is_mine) {
+            uncover_from_number(game, uncover_pos, uncovered_cell);
+        }
+
+        return;
     }
 
     // Uncover cell
@@ -277,14 +287,77 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     }
 }
 
-pub fn toggle_flag(game: *GameState, x: u16, y: u16) void {
-    assert(x < game.extent_x);
-    assert(y < game.extent_y);
+// Discovers all adjacent cells around a numbered cell,
+// if the number of flags around it equals that number.
+// This can make you lose if your flags aren't set properly.
+pub fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellState) void {
+    assert(number_cell.mine_neighbors > 0);
+    assert(!number_cell.is_covered);
+    assert(!number_cell.is_mine);
+
+    var offset_table = [8]i8_2{
+        i8_2{ .x = -1, .y = -1 },
+        i8_2{ .x = -1, .y = 0 },
+        i8_2{ .x = -1, .y = 1 },
+        i8_2{ .x = 0, .y = -1 },
+        i8_2{ .x = 0, .y = 1 },
+        i8_2{ .x = 1, .y = -1 },
+        i8_2{ .x = 1, .y = -0 },
+        i8_2{ .x = 1, .y = 1 },
+    };
+
+    var candidates: [8]u16_2 = undefined;
+    var candidate_count: u32 = 0;
+    var flag_count: u32 = 0;
+
+    for (offset_table) |offset| {
+        const target_x = @intCast(i16, number_pos.x) + offset.x;
+        const target_y = @intCast(i16, number_pos.y) + offset.y;
+
+        // Out of bounds
+        if (target_x < 0 or target_y < 0)
+            continue;
+        if (target_x >= game.extent_x or target_y >= game.extent_y)
+            continue;
+
+        const utarget = u16_2{
+            .x = @intCast(u16, target_x),
+            .y = @intCast(u16, target_y),
+        };
+
+        var target_cell = &game.board[utarget.x][utarget.y];
+
+        assert(!(!target_cell.is_covered and target_cell.is_flagged));
+
+        if (target_cell.is_flagged) {
+            flag_count += 1;
+        } else if (target_cell.is_covered) {
+            candidates[candidate_count] = utarget;
+            candidate_count += 1;
+        }
+    }
+
+    if (number_cell.mine_neighbors == flag_count) {
+        append_discover_number_event(game, number_pos, true);
+
+        var candidate_index: u32 = 0;
+        while (candidate_index < candidate_count) {
+            uncover(game, candidates[candidate_index]);
+            candidate_index += 1;
+        }
+    } else {
+        append_discover_number_event(game, number_pos, false);
+    }
+}
+
+pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
+    assert(flag_pos.x < game.extent_x);
+    assert(flag_pos.y < game.extent_y);
 
     if (game.is_first_move or game.is_ended)
         return;
 
-    var cell = &game.board[x][y];
+    var cell = &game.board[flag_pos.x][flag_pos.y];
 
     if (!cell.is_covered)
         return;
