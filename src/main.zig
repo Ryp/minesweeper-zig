@@ -14,9 +14,9 @@ pub fn main() !void {
 
     assert(args.len == 4);
 
-    const extent_x = try std.fmt.parseUnsigned(u16, args[1], 0);
-    const extent_y = try std.fmt.parseUnsigned(u16, args[2], 0);
-    const mine_count = try std.fmt.parseUnsigned(u16, args[3], 0);
+    const extent_x = try std.fmt.parseUnsigned(u32, args[1], 0);
+    const extent_y = try std.fmt.parseUnsigned(u32, args[2], 0);
+    const mine_count = try std.fmt.parseUnsigned(u32, args[3], 0);
 
     // Using the method from the docs to get a reasonably random seed
     var buf: [8]u8 = undefined;

@@ -3,10 +3,10 @@ const assert = std.debug.assert;
 
 usingnamespace @import("event.zig");
 
-const MineSweeperBoardExtentMinX: u16 = 2;
-const MineSweeperBoardExtentMinY: u16 = 2;
-const MineSweeperBoardExtentMaxX: u16 = 1024;
-const MineSweeperBoardExtentMaxY: u16 = 1024;
+const MineSweeperBoardExtentMinX: u32 = 2;
+const MineSweeperBoardExtentMinY: u32 = 2;
+const MineSweeperBoardExtentMaxX: u32 = 1024;
+const MineSweeperBoardExtentMaxY: u32 = 1024;
 
 const i8_2 = struct {
     x: i8,
@@ -26,9 +26,9 @@ pub const CellState = struct {
 };
 
 pub const GameState = struct {
-    extent_x: u16,
-    extent_y: u16,
-    mine_count: u16,
+    extent_x: u32,
+    extent_y: u32,
+    mine_count: u32,
     board: [][]CellState,
     rng: *std.rand.Random,
     is_first_move: bool,
@@ -42,7 +42,7 @@ pub const GameState = struct {
 };
 
 // Creates blank board without mines
-pub fn create_game_state(extent_x: u16, extent_y: u16, mine_count: u16, rng: *std.rand.Random) !GameState {
+pub fn create_game_state(extent_x: u32, extent_y: u32, mine_count: u32, rng: *std.rand.Random) !GameState {
     assert(extent_x >= MineSweeperBoardExtentMinX and extent_y >= MineSweeperBoardExtentMinY);
     assert(extent_x <= MineSweeperBoardExtentMaxX and extent_y <= MineSweeperBoardExtentMaxY);
 
@@ -201,8 +201,8 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 
     // Randomly place the mines on the board
     while (remaining_mines > 0) {
-        const random_x = game.rng.uintLessThan(u16, game.extent_x);
-        const random_y = game.rng.uintLessThan(u16, game.extent_y);
+        const random_x = game.rng.uintLessThan(u32, game.extent_x);
+        const random_y = game.rng.uintLessThan(u32, game.extent_y);
 
         // Do not generate mines where the player starts
         if (random_x == start.x and random_y == start.y)
