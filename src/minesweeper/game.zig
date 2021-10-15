@@ -3,8 +3,8 @@ const assert = std.debug.assert;
 
 usingnamespace @import("event.zig");
 
-const MineSweeperBoardExtentMinX: u32 = 2;
-const MineSweeperBoardExtentMinY: u32 = 2;
+const MineSweeperBoardExtentMinX: u32 = 5;
+const MineSweeperBoardExtentMinY: u32 = 5;
 const MineSweeperBoardExtentMaxX: u32 = 1024;
 const MineSweeperBoardExtentMaxY: u32 = 1024;
 
@@ -16,6 +16,20 @@ const i8_2 = struct {
 pub const u16_2 = struct {
     x: u16,
     y: u16,
+};
+
+const u32_2 = std.meta.Vector(2, u32);
+
+const neighborhood_offset_table = [9]i8_2{
+    i8_2{ .x = -1, .y = -1 },
+    i8_2{ .x = -1, .y = 0 },
+    i8_2{ .x = -1, .y = 1 },
+    i8_2{ .x = 0, .y = -1 },
+    i8_2{ .x = 0, .y = 1 },
+    i8_2{ .x = 1, .y = -1 },
+    i8_2{ .x = 1, .y = -0 },
+    i8_2{ .x = 1, .y = 1 },
+    i8_2{ .x = 0, .y = 0 }, // Center position at the end so we can easily ignore it
 };
 
 pub const CellState = struct {
@@ -48,7 +62,7 @@ pub fn create_game_state(extent_x: u32, extent_y: u32, mine_count: u32, rng: *st
 
     const cell_count = extent_x * extent_y;
     assert(mine_count > 0);
-    assert(mine_count <= cell_count / 2);
+    assert(mine_count <= (cell_count - 9) / 2); // 9 is to take into account the starting position that has no mines in the neighborhood
 
     var game: GameState = undefined;
     game.extent_x = extent_x;
@@ -182,21 +196,18 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
     }
 }
 
+fn is_neighbor(a: u32_2, b: u32_2) !bool {
+    const dx = try std.math.absInt(@intCast(i32, a[0]) - @intCast(i32, b[0]));
+    const dy = try std.math.absInt(@intCast(i32, a[1]) - @intCast(i32, b[1]));
+    return dx <= 1 and dy <= 1;
+}
+
 // Feed a blank but initialized board and it will dart throw mines at it until it has the right
 // number of mines.
+// We make sure that no mines is placed in the startup location, including its immediate neighborhood.
+// Often players restart the game until they land on this type of spots anyway, that removes the
+// frustrating guessing part.
 pub fn fill_mines(game: *GameState, start: u16_2) void {
-    var neighbour_offset_table = [9]i8_2{
-        i8_2{ .x = -1, .y = -1 },
-        i8_2{ .x = -1, .y = 0 },
-        i8_2{ .x = -1, .y = 1 },
-        i8_2{ .x = 0, .y = -1 },
-        i8_2{ .x = 0, .y = 0 },
-        i8_2{ .x = 0, .y = 1 },
-        i8_2{ .x = 1, .y = -1 },
-        i8_2{ .x = 1, .y = -0 },
-        i8_2{ .x = 1, .y = 1 },
-    };
-
     var remaining_mines = game.mine_count;
 
     // Randomly place the mines on the board
@@ -205,7 +216,7 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
         const random_y = game.rng.uintLessThan(u32, game.extent_y);
 
         // Do not generate mines where the player starts
-        if (random_x == start.x and random_y == start.y)
+        if (is_neighbor(u32_2{ random_x, random_y }, u32_2{ start.x, start.y }) catch false)
             continue;
 
         var random_cell = &game.board[random_x][random_y];
@@ -216,7 +227,7 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
         random_cell.is_mine = true;
 
         // Increment the counts for neighboring cells
-        for (neighbour_offset_table) |offset| {
+        for (neighborhood_offset_table[0..9]) |offset| {
             const target_x = @intCast(i16, random_x) + offset.x;
             const target_y = @intCast(i16, random_y) + offset.y;
 
@@ -236,17 +247,6 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 // Discovers all cells adjacents to a zero-neighbor cell
 // Careful, this function is recursive.
 pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
-    var offset_table = [8]i8_2{
-        i8_2{ .x = -1, .y = -1 },
-        i8_2{ .x = -1, .y = 0 },
-        i8_2{ .x = -1, .y = 1 },
-        i8_2{ .x = 0, .y = -1 },
-        i8_2{ .x = 0, .y = 1 },
-        i8_2{ .x = 1, .y = -1 },
-        i8_2{ .x = 1, .y = -0 },
-        i8_2{ .x = 1, .y = 1 },
-    };
-
     var cell = &game.board[uncover_pos.x][uncover_pos.y];
 
     assert(cell.mine_neighbors == 0);
@@ -256,7 +256,7 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     game.children_array[game.children_array_index] = uncover_pos;
     game.children_array_index += 1;
 
-    for (offset_table) |offset| {
+    for (neighborhood_offset_table[0..8]) |offset| {
         const target_x = @intCast(i16, uncover_pos.x) + offset.x;
         const target_y = @intCast(i16, uncover_pos.y) + offset.y;
 
@@ -295,22 +295,11 @@ pub fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *Ce
     assert(!number_cell.is_covered);
     assert(!number_cell.is_mine);
 
-    var offset_table = [8]i8_2{
-        i8_2{ .x = -1, .y = -1 },
-        i8_2{ .x = -1, .y = 0 },
-        i8_2{ .x = -1, .y = 1 },
-        i8_2{ .x = 0, .y = -1 },
-        i8_2{ .x = 0, .y = 1 },
-        i8_2{ .x = 1, .y = -1 },
-        i8_2{ .x = 1, .y = -0 },
-        i8_2{ .x = 1, .y = 1 },
-    };
-
     var candidates: [8]u16_2 = undefined;
     var candidate_count: u32 = 0;
     var flag_count: u32 = 0;
 
-    for (offset_table) |offset| {
+    for (neighborhood_offset_table[0..8]) |offset| {
         const target_x = @intCast(i16, number_pos.x) + offset.x;
         const target_y = @intCast(i16, number_pos.y) + offset.y;
 
