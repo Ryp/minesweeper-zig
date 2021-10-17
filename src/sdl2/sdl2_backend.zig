@@ -7,6 +7,13 @@ const c = @cImport({
 
 const minesweeper = @import("../minesweeper/game.zig");
 
+const InvalidMoveTimeSecs: f32 = 0.3;
+
+const GfxState = struct {
+    is_hovered: bool = false,
+    invalid_move_time_secs: f32 = 0.0,
+};
+
 fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool) [2]u8 {
     if (cell.is_covered) {
         var index_x: u8 = 0;
@@ -22,6 +29,33 @@ fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool) [2]u8 {
 
         return .{ cell.mine_neighbors, 0 };
     }
+}
+
+fn allocate_2d_array_default_init(comptime T: type, x: usize, y: usize) ![][]T {
+    const allocator: *std.mem.Allocator = std.heap.page_allocator;
+    var array = try allocator.alloc([]T, x);
+    errdefer allocator.free(array);
+
+    for (array) |*column| {
+        column.* = try allocator.alloc(T, y);
+        errdefer allocator.free(column);
+
+        for (column.*) |*cell| {
+            cell.* = .{};
+        }
+    }
+
+    return array;
+}
+
+fn deallocate_2d_array(comptime T: type, array: [][]T) void {
+    const allocator: *std.mem.Allocator = std.heap.page_allocator;
+
+    for (array) |column| {
+        allocator.free(column);
+    }
+
+    allocator.free(array);
 }
 
 pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
@@ -70,7 +104,14 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
 
     var shouldExit = false;
 
+    var gfx_board = try allocate_2d_array_default_init(GfxState, game_state.extent_x, game_state.extent_y);
+    var gfx_event_index: usize = 0;
+    var last_frame_time_ms: u32 = c.SDL_GetTicks();
+
     while (!shouldExit) {
+        const current_frame_time_ms: u32 = c.SDL_GetTicks();
+        const frame_delta_secs = @intToFloat(f32, current_frame_time_ms - last_frame_time_ms) * 0.001;
+
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&sdlEvent) > 0) {
@@ -101,34 +142,81 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
         const hovered_cell_x = @intCast(u16, @divTrunc(mouse_x, scale));
         const hovered_cell_y = @intCast(u16, @divTrunc(mouse_y, scale));
 
+        for (gfx_board) |column| {
+            for (column) |*cell| {
+                cell.is_hovered = false;
+                cell.invalid_move_time_secs = std.math.max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
+            }
+        }
+        // FIXME OOB handling
+        gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
+
+        // Process game events for the gfx side
+        for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
+            switch (game_event) {
+                minesweeper.GameEventTag.discover_number => |event| {
+                    if (!event.is_valid_move) {
+                        gfx_board[event.location.x][event.location.y].invalid_move_time_secs = InvalidMoveTimeSecs;
+                    }
+                },
+                else => {}, // FIXME
+            }
+        }
+
+        // Advance event index since we processed the rest
+        gfx_event_index = game_state.event_history_index;
+
         // Render game
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board) |column, i| {
             for (column) |cell, j| {
-                const is_hovered = (i == hovered_cell_x) and (j == hovered_cell_y);
+                const gfx_cell = gfx_board[i][j];
 
-                const sprite_sheet_pos = get_tile_index(cell, is_hovered);
-
-                const sprite_sheet_rect = c.SDL_Rect{
-                    .x = sprite_sheet_pos[0] * sprite_sheet_tile_extent,
-                    .y = sprite_sheet_pos[1] * sprite_sheet_tile_extent,
-                    .w = sprite_sheet_tile_extent,
-                    .h = sprite_sheet_tile_extent,
-                };
-
-                const sprite_pos_rect = c.SDL_Rect{
+                const sprite_output_pos_rect = c.SDL_Rect{
                     .x = @intCast(c_int, i * scale),
                     .y = @intCast(c_int, j * scale),
                     .w = scale,
                     .h = scale,
                 };
 
-                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_pos_rect);
+                {
+                    const sprite_sheet_pos = get_tile_index(cell, gfx_cell.is_hovered);
+
+                    const sprite_sheet_rect = c.SDL_Rect{
+                        .x = sprite_sheet_pos[0] * sprite_sheet_tile_extent,
+                        .y = sprite_sheet_pos[1] * sprite_sheet_tile_extent,
+                        .w = sprite_sheet_tile_extent,
+                        .h = sprite_sheet_tile_extent,
+                    };
+
+                    _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                }
+
+                if (gfx_cell.invalid_move_time_secs > 0.0) {
+                    const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
+
+                    const sprite_sheet_rect = c.SDL_Rect{
+                        .x = 6 * sprite_sheet_tile_extent,
+                        .y = 1 * sprite_sheet_tile_extent,
+                        .w = sprite_sheet_tile_extent,
+                        .h = sprite_sheet_tile_extent,
+                    };
+
+                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @floatToInt(u8, alpha * 255.0));
+
+                    _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+
+                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
+                }
             }
         }
 
         // Present
         c.SDL_RenderPresent(ren);
+
+        last_frame_time_ms = current_frame_time_ms;
     }
+
+    deallocate_2d_array(GfxState, gfx_board);
 }
