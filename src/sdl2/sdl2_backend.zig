@@ -7,6 +7,7 @@ const c = @cImport({
 
 const minesweeper = @import("../minesweeper/game.zig");
 
+const SpriteSheetTileExtent = 19;
 const InvalidMoveTimeSecs: f32 = 0.3;
 
 const GfxState = struct {
@@ -14,13 +15,18 @@ const GfxState = struct {
     invalid_move_time_secs: f32 = 0.0,
 };
 
-fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool) [2]u8 {
+fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool, is_game_ended: bool) [2]u8 {
     if (cell.is_covered) {
         var index_x: u8 = 0;
-        if (cell.is_flagged)
-            index_x = 2;
+        if (cell.is_flagged) {
+            if (is_game_ended and !cell.is_mine) {
+                index_x = 8;
+            } else {
+                index_x = 2;
+            }
+        }
         // FIXME implement '?'
-        if (is_hovered)
+        if (is_hovered and !is_game_ended)
             index_x += 1;
         return .{ index_x, 1 };
     } else {
@@ -29,6 +35,15 @@ fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool) [2]u8 {
 
         return .{ cell.mine_neighbors, 0 };
     }
+}
+
+fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
+    return c.SDL_Rect{
+        .x = position[0] * SpriteSheetTileExtent,
+        .y = position[1] * SpriteSheetTileExtent,
+        .w = SpriteSheetTileExtent,
+        .h = SpriteSheetTileExtent,
+    };
 }
 
 fn allocate_2d_array_default_init(comptime T: type, allocator: *std.mem.Allocator, x: usize, y: usize) ![][]T {
@@ -85,7 +100,6 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
 
     // Create sprite sheet
     // FIXME Using relative path for now
-    const sprite_sheet_tile_extent = 19;
     const sprite_sheet_surface = c.SDL_LoadBMP("res/tile.bmp") orelse {
         c.SDL_Log("Unable to create BMP surface from file: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
@@ -183,33 +197,21 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                     .h = scale,
                 };
 
+                // Draw base cell sprite
                 {
-                    const sprite_sheet_pos = get_tile_index(cell, gfx_cell.is_hovered);
-
-                    const sprite_sheet_rect = c.SDL_Rect{
-                        .x = sprite_sheet_pos[0] * sprite_sheet_tile_extent,
-                        .y = sprite_sheet_pos[1] * sprite_sheet_tile_extent,
-                        .w = sprite_sheet_tile_extent,
-                        .h = sprite_sheet_tile_extent,
-                    };
+                    const sprite_sheet_pos = get_tile_index(cell, gfx_cell.is_hovered, game_state.is_ended);
+                    const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
 
                     _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
                 }
 
+                // Draw overlay on invalid move
                 if (gfx_cell.invalid_move_time_secs > 0.0) {
                     const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
-
-                    const sprite_sheet_rect = c.SDL_Rect{
-                        .x = 8 * sprite_sheet_tile_extent,
-                        .y = 1 * sprite_sheet_tile_extent,
-                        .w = sprite_sheet_tile_extent,
-                        .h = sprite_sheet_tile_extent,
-                    };
+                    const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
 
                     _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @floatToInt(u8, alpha * 255.0));
-
                     _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
-
                     _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
                 }
             }
