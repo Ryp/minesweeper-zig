@@ -8,6 +8,7 @@ const c = @cImport({
 const minesweeper = @import("../minesweeper/game.zig");
 
 const SpriteSheetTileExtent = 19;
+const SpriteScreenExtent = 38;
 const InvalidMoveTimeSecs: f32 = 0.3;
 
 const GfxState = struct {
@@ -70,9 +71,8 @@ fn deallocate_2d_array(comptime T: type, allocator: *std.mem.Allocator, array: [
 }
 
 pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper.GameState) !void {
-    const scale = 38;
-    const width = game_state.extent[0] * scale;
-    const height = game_state.extent[1] * scale;
+    const width = game_state.extent[0] * SpriteScreenExtent;
+    const height = game_state.extent[1] * SpriteScreenExtent;
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -134,8 +134,8 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                         shouldExit = true;
                 },
                 .SDL_MOUSEBUTTONUP => {
-                    const x = @intCast(u16, @divTrunc(sdlEvent.button.x, scale));
-                    const y = @intCast(u16, @divTrunc(sdlEvent.button.y, scale));
+                    const x = @intCast(u16, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
+                    const y = @intCast(u16, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
                         minesweeper.uncover(game_state, .{ x, y });
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
@@ -154,8 +154,8 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
         _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[0], @divTrunc(mouse_x, scale))));
-        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[1], @divTrunc(mouse_y, scale))));
+        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[0], @divTrunc(mouse_x, SpriteScreenExtent))));
+        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[1], @divTrunc(mouse_y, SpriteScreenExtent))));
 
         for (gfx_board) |column| {
             for (column) |*cell| {
@@ -188,10 +188,10 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                 const gfx_cell = gfx_board[i][j];
 
                 const sprite_output_pos_rect = c.SDL_Rect{
-                    .x = @intCast(c_int, i * scale),
-                    .y = @intCast(c_int, j * scale),
-                    .w = scale,
-                    .h = scale,
+                    .x = @intCast(c_int, i * SpriteScreenExtent),
+                    .y = @intCast(c_int, j * SpriteScreenExtent),
+                    .w = SpriteScreenExtent,
+                    .h = SpriteScreenExtent,
                 };
 
                 // Draw base cell sprite
