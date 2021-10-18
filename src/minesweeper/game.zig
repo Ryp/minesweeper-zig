@@ -51,12 +51,18 @@ pub fn cell_at(game: *GameState, position: u32_2) *CellState {
 
 // I borrowed this name from HLSL
 fn all(vector: anytype) bool {
-    // FIXME assert for compatible types
+    const type_info = @typeInfo(@TypeOf(vector));
+    assert(type_info.Vector.child == bool);
+    assert(type_info.Vector.len > 1);
+
     return @reduce(.And, vector);
 }
 
 fn any(vector: anytype) bool {
-    // FIXME assert for compatible types
+    const type_info = @typeInfo(@TypeOf(vector));
+    assert(type_info.Vector.child == bool);
+    assert(type_info.Vector.len > 1);
+
     return @reduce(.Or, vector);
 }
 
