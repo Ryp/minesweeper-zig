@@ -58,7 +58,7 @@ fn any(vector: anytype) bool {
 }
 
 // Creates blank board without mines
-pub fn create_game_state(extent: u32_2, mine_count: u32, seed: u64) !GameState {
+pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_count: u32, seed: u64) !GameState {
     assert(all(extent >= MineSweeperBoardExtentMin));
     assert(all(extent <= MineSweeperBoardExtentMax));
 
@@ -74,8 +74,6 @@ pub fn create_game_state(extent: u32_2, mine_count: u32, seed: u64) !GameState {
     game.is_ended = false;
     game.children_array_index = 0;
     game.event_history_index = 0;
-
-    const allocator: *std.mem.Allocator = std.heap.page_allocator;
 
     game.board = try allocator.alloc([]CellState, extent[0]);
     errdefer allocator.free(game.board);
@@ -103,9 +101,7 @@ pub fn create_game_state(extent: u32_2, mine_count: u32, seed: u64) !GameState {
     return game;
 }
 
-pub fn destroy_game_state(game: *GameState) void {
-    const allocator: *std.mem.Allocator = std.heap.page_allocator;
-
+pub fn destroy_game_state(allocator: *std.mem.Allocator, game: *GameState) void {
     allocator.free(game.children_array);
     allocator.free(game.event_history);
 

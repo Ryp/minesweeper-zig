@@ -5,12 +5,12 @@ const sdl2 = @import("sdl2/sdl2_backend.zig");
 const minesweeper = @import("minesweeper/minesweeper.zig");
 
 pub fn main() !void {
-    // Parse arguments
-    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = &general_purpose_allocator.allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
 
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
+    // Parse arguments
+    const args = try std.process.argsAlloc(&gpa.allocator);
+    defer std.process.argsFree(&gpa.allocator, args);
 
     assert(args.len == 4);
 
@@ -24,8 +24,8 @@ pub fn main() !void {
     const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
 
     // Create game state
-    var game_state = try minesweeper.create_game_state(.{ extent_x, extent_y }, mine_count, seed);
-    defer minesweeper.destroy_game_state(&game_state);
+    var game_state = try minesweeper.create_game_state(&gpa.allocator, .{ extent_x, extent_y }, mine_count, seed);
+    defer minesweeper.destroy_game_state(&gpa.allocator, &game_state);
 
-    try sdl2.execute_main_loop(&game_state);
+    try sdl2.execute_main_loop(&gpa.allocator, &game_state);
 }

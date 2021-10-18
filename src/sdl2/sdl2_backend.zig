@@ -31,8 +31,7 @@ fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool) [2]u8 {
     }
 }
 
-fn allocate_2d_array_default_init(comptime T: type, x: usize, y: usize) ![][]T {
-    const allocator: *std.mem.Allocator = std.heap.page_allocator;
+fn allocate_2d_array_default_init(comptime T: type, allocator: *std.mem.Allocator, x: usize, y: usize) ![][]T {
     var array = try allocator.alloc([]T, x);
     errdefer allocator.free(array);
 
@@ -48,9 +47,7 @@ fn allocate_2d_array_default_init(comptime T: type, x: usize, y: usize) ![][]T {
     return array;
 }
 
-fn deallocate_2d_array(comptime T: type, array: [][]T) void {
-    const allocator: *std.mem.Allocator = std.heap.page_allocator;
-
+fn deallocate_2d_array(comptime T: type, allocator: *std.mem.Allocator, array: [][]T) void {
     for (array) |column| {
         allocator.free(column);
     }
@@ -58,7 +55,7 @@ fn deallocate_2d_array(comptime T: type, array: [][]T) void {
     allocator.free(array);
 }
 
-pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
+pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper.GameState) !void {
     const scale = 38;
     const width = game_state.extent[0] * scale;
     const height = game_state.extent[1] * scale;
@@ -104,7 +101,7 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
 
     var shouldExit = false;
 
-    var gfx_board = try allocate_2d_array_default_init(GfxState, game_state.extent[0], game_state.extent[1]);
+    var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent[0], game_state.extent[1]);
     var gfx_event_index: usize = 0;
     var last_frame_time_ms: u32 = c.SDL_GetTicks();
 
@@ -218,5 +215,5 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
         last_frame_time_ms = current_frame_time_ms;
     }
 
-    deallocate_2d_array(GfxState, gfx_board);
+    deallocate_2d_array(GfxState, allocator, gfx_board);
 }
