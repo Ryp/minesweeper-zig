@@ -83,6 +83,12 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
     };
     defer c.SDL_DestroyRenderer(ren);
 
+    // FIXME find a way to null-terminate strings from allocPrint()
+    const string = try std.fmt.allocPrint(allocator, "Minesweeper {d}x{d} with {d} mines {c}", .{ game_state.extent[0], game_state.extent[1], game_state.mine_count, 0 });
+    defer allocator.free(string);
+
+    c.SDL_SetWindowTitle(window, string.ptr);
+
     // Create sprite sheet
     // FIXME Using relative path for now
     const sprite_sheet_tile_extent = 19;
