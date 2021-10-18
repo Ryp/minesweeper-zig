@@ -245,8 +245,10 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     assert(cell.mine_neighbors == 0);
 
     assert(cell.is_covered);
-    assert(!cell.is_flagged);
 
+    // If the user put an invalid flag there by mistake, we clear it for him
+    // NOTE: That can only happens in recursive calls.
+    cell.is_flagged = false;
     cell.is_covered = false;
 
     game.children_array[game.children_array_index] = uncover_pos;
