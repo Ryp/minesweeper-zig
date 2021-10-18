@@ -158,7 +158,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
         for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
             switch (game_event) {
                 minesweeper.GameEventTag.discover_number => |event| {
-                    if (!event.is_valid_move) {
+                    if (event.children.len == 0) {
                         gfx_board[event.location[0]][event.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },

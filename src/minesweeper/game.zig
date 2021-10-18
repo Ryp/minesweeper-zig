@@ -50,10 +50,12 @@ pub fn cell_at(game: *GameState, position: u32_2) *CellState {
 
 // I borrowed this name from HLSL
 fn all(vector: anytype) bool {
+    // FIXME assert for compatible types
     return @reduce(.And, vector);
 }
 
 fn any(vector: anytype) bool {
+    // FIXME assert for compatible types
     return @reduce(.Or, vector);
 }
 
@@ -127,19 +129,22 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
     var uncovered_cell = cell_at(game, uncover_pos);
 
     if (uncovered_cell.is_flagged) {
-        return; // Nothing to do!
+        return; // Nothing happens!
     }
 
     if (!uncovered_cell.is_covered) {
-        if (uncovered_cell.mine_neighbors > 0 and !uncovered_cell.is_mine) {
+        if (!uncovered_cell.is_mine and uncovered_cell.mine_neighbors > 0) {
+            const start_children = game.children_array_index;
+
             uncover_from_number(game, uncover_pos, uncovered_cell);
+
+            const end_children = game.children_array_index;
+
+            append_discover_number_event(game, uncover_pos, game.children_array[start_children..end_children]);
+        } else {
+            return; // Nothing happens!
         }
-
-        return;
-    }
-
-    // Uncover cell
-    if (uncovered_cell.mine_neighbors == 0) {
+    } else if (uncovered_cell.mine_neighbors == 0) {
         // Create new event
         const start_children = game.children_array_index;
 
@@ -231,12 +236,16 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
     }
 }
 
-// Discovers all cells adjacents to a zero-neighbor cell
-// Careful, this function is recursive.
+// Discovers all cells adjacents to a zero-neighbor cell.
+// Assumes that the play is valid.
+// Careful, this function is recursive! It WILL smash the stack on large boards
 pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     var cell = cell_at(game, uncover_pos);
 
     assert(cell.mine_neighbors == 0);
+
+    assert(cell.is_covered);
+    assert(!cell.is_flagged);
 
     cell.is_covered = false;
 
@@ -301,15 +310,25 @@ pub fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *Ce
     }
 
     if (number_cell.mine_neighbors == flag_count) {
-        append_discover_number_event(game, number_pos, true);
-
         var candidate_index: u32 = 0;
         while (candidate_index < candidate_count) {
-            uncover(game, candidates[candidate_index]);
+            const candidate_pos = candidates[candidate_index];
+            var cell = cell_at(game, candidate_pos);
+
+            assert(cell.is_flagged == false);
+
+            // We might trigger second-hand big uncovers!
+            if (cell.mine_neighbors == 0) {
+                uncover_zero_neighbors(game, candidate_pos);
+            } else {
+                cell.is_covered = false;
+            }
+
+            game.children_array[game.children_array_index] = candidate_pos;
+            game.children_array_index += 1;
+
             candidate_index += 1;
         }
-    } else {
-        append_discover_number_event(game, number_pos, false);
     }
 }
 

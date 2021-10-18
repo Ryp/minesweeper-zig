@@ -11,7 +11,7 @@ pub const DiscoverManyEvent = struct {
 
 pub const DiscoverNumberEvent = struct {
     location: u16_2,
-    is_valid_move: bool,
+    children: []u16_2,
 };
 
 pub const GameResult = enum {
@@ -63,12 +63,12 @@ pub fn append_discover_many_event(game: *GameState, location: u16_2, children: [
     };
 }
 
-pub fn append_discover_number_event(game: *GameState, location: u16_2, is_valid_move: bool) void {
+pub fn append_discover_number_event(game: *GameState, location: u16_2, children: []u16_2) void {
     var new_event = allocate_new_event(game);
     new_event.* = GameEvent{
         .discover_number = DiscoverNumberEvent{
             .location = location,
-            .is_valid_move = is_valid_move,
+            .children = children,
         },
     };
 }

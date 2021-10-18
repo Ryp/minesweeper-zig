@@ -80,9 +80,9 @@ test "Number uncover" {
     toggle_flag(&game_state, .{ 0, 2 });
     uncover(&game_state, .{ 1, 1 });
 
+    try expectEqual(cell_at(&game_state, .{ 2, 1 }).is_covered, false);
+    try expectEqual(cell_at(&game_state, .{ 3, 1 }).is_covered, false);
     try expect(game_state.event_history[0] == GameEventTag.discover_many);
     try expect(game_state.event_history[1] == GameEventTag.discover_number);
-    try expect(game_state.event_history[2] == GameEventTag.discover_single);
-    try expect(game_state.event_history[3] == GameEventTag.discover_single);
     try expectEqual(game_state.is_ended, false);
 }
