@@ -25,7 +25,6 @@ fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool, is_game_ended: 
                 index_x = 2;
             }
         }
-        // FIXME implement '?'
         if (is_hovered and !is_game_ended)
             index_x += 1;
         return .{ index_x, 1 };
@@ -99,7 +98,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
     defer c.SDL_DestroyRenderer(ren);
 
     // Create sprite sheet
-    // FIXME Using relative path for now
+    // Using relative path for now
     const sprite_sheet_surface = c.SDL_LoadBMP("res/tile.bmp") orelse {
         c.SDL_Log("Unable to create BMP surface from file: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
@@ -147,8 +146,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
             }
         }
 
-        // FIXME find a better way to null-terminate strings from allocPrint()
-        const string = try std.fmt.allocPrint(allocator, "Minesweeper {d}x{d} with {d}/{d} mines {c}", .{ game_state.extent[0], game_state.extent[1], game_state.flag_count, game_state.mine_count, 0 });
+        const string = try std.fmt.allocPrintZ(allocator, "Minesweeper {d}x{d} with {d}/{d} mines", .{ game_state.extent[0], game_state.extent[1], game_state.flag_count, game_state.mine_count });
         defer allocator.free(string);
 
         c.SDL_SetWindowTitle(window, string.ptr);
@@ -175,7 +173,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                         gfx_board[event.location[0]][event.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
-                else => {}, // FIXME
+                else => {},
             }
         }
 

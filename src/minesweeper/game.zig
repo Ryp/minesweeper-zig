@@ -210,7 +210,8 @@ pub fn check_win_conditions(game: *GameState) void {
         for (game.board) |column| {
             for (column) |*cell| {
                 if (cell.is_mine) {
-                    cell.is_flagged = true; // FIXME flag state
+                    // Here we should update the flag count but since we won there's no need
+                    cell.is_flagged = true;
                 } else {
                     cell.is_covered = false;
                 }
