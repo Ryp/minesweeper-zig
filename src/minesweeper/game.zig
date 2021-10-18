@@ -23,10 +23,10 @@ const neighborhood_offset_table = [9]i16_2{
 };
 
 pub const CellState = struct {
-    is_mine: bool,
-    is_covered: bool,
-    is_flagged: bool,
-    mine_neighbors: u4,
+    is_mine: bool = false,
+    is_covered: bool = true,
+    is_flagged: bool = false,
+    mine_neighbors: u4 = 0,
 };
 
 pub const GameState = struct {
@@ -85,12 +85,7 @@ pub fn create_game_state(extent: u32_2, mine_count: u32, seed: u64) !GameState {
         errdefer allocator.free(column);
 
         for (column.*) |*cell| {
-            cell.* = CellState{
-                .is_mine = false,
-                .is_covered = true,
-                .is_flagged = false,
-                .mine_neighbors = 0,
-            };
+            cell.* = .{};
         }
     }
 
