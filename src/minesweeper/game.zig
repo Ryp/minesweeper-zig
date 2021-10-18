@@ -169,7 +169,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
     check_win_conditions(game);
 }
 
-pub fn check_win_conditions(game: *GameState) void {
+fn check_win_conditions(game: *GameState) void {
     assert(!game.is_ended);
 
     {
@@ -234,7 +234,7 @@ fn is_neighbor(a: u32_2, b: u32_2) !bool {
 // We make sure that no mines is placed in the startup location, including its immediate neighborhood.
 // Often players restart the game until they land on this type of spots anyway, that removes the
 // frustrating guessing part.
-pub fn fill_mines(game: *GameState, start: u16_2) void {
+fn fill_mines(game: *GameState, start: u16_2) void {
     var remaining_mines = game.mine_count;
 
     // Randomly place the mines on the board
@@ -270,7 +270,7 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 // Discovers all cells adjacents to a zero-neighbor cell.
 // Assumes that the play is valid.
 // Careful, this function is recursive! It WILL smash the stack on large boards
-pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
+fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     var cell = cell_at(game, uncover_pos);
 
     assert(cell.mine_neighbors == 0);
@@ -311,7 +311,7 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
 // Discovers all adjacent cells around a numbered cell,
 // if the number of flags around it equals that number.
 // This can make you lose if your flags aren't set properly.
-pub fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellState) void {
+fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellState) void {
     assert(number_cell.mine_neighbors > 0);
     assert(!number_cell.is_covered);
     assert(!number_cell.is_mine);
@@ -383,7 +383,7 @@ pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
     cell.is_flagged = !cell.is_flagged;
 }
 
-pub fn is_board_won(board: [][]CellState) bool {
+fn is_board_won(board: [][]CellState) bool {
     for (board) |column| {
         for (column) |cell| {
             if (cell.is_covered and !cell.is_mine)
