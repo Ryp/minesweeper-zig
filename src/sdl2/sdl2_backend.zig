@@ -60,8 +60,8 @@ fn deallocate_2d_array(comptime T: type, array: [][]T) void {
 
 pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
     const scale = 38;
-    const width = game_state.extent_x * scale;
-    const height = game_state.extent_y * scale;
+    const width = game_state.extent[0] * scale;
+    const height = game_state.extent[1] * scale;
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -104,7 +104,7 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
 
     var shouldExit = false;
 
-    var gfx_board = try allocate_2d_array_default_init(GfxState, game_state.extent_x, game_state.extent_y);
+    var gfx_board = try allocate_2d_array_default_init(GfxState, game_state.extent[0], game_state.extent[1]);
     var gfx_event_index: usize = 0;
     var last_frame_time_ms: u32 = c.SDL_GetTicks();
 
@@ -127,9 +127,9 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
                     const x = @intCast(u16, @divTrunc(sdlEvent.button.x, scale));
                     const y = @intCast(u16, @divTrunc(sdlEvent.button.y, scale));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        minesweeper.uncover(game_state, .{ .x = x, .y = y });
+                        minesweeper.uncover(game_state, .{ x, y });
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
-                        minesweeper.toggle_flag(game_state, .{ .x = x, .y = y });
+                        minesweeper.toggle_flag(game_state, .{ x, y });
                     }
                 },
                 else => {},
@@ -156,7 +156,7 @@ pub fn execute_main_loop(game_state: *minesweeper.GameState) !void {
             switch (game_event) {
                 minesweeper.GameEventTag.discover_number => |event| {
                     if (!event.is_valid_move) {
-                        gfx_board[event.location.x][event.location.y].invalid_move_time_secs = InvalidMoveTimeSecs;
+                        gfx_board[event.location[0]][event.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
                 else => {}, // FIXME

@@ -26,7 +26,7 @@ pub fn main() !void {
     var rng = std.rand.DefaultPrng.init(seed);
 
     // Create game state
-    var game_state = try minesweeper.create_game_state(extent_x, extent_y, mine_count, &rng.random);
+    var game_state = try minesweeper.create_game_state(.{ extent_x, extent_y }, mine_count, &rng.random);
     defer minesweeper.destroy_game_state(&game_state);
 
     try sdl2.execute_main_loop(&game_state);

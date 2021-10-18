@@ -3,33 +3,23 @@ const assert = std.debug.assert;
 
 usingnamespace @import("event.zig");
 
-const MineSweeperBoardExtentMinX: u32 = 5;
-const MineSweeperBoardExtentMinY: u32 = 5;
-const MineSweeperBoardExtentMaxX: u32 = 1024;
-const MineSweeperBoardExtentMaxY: u32 = 1024;
+pub const u16_2 = std.meta.Vector(2, u16);
+pub const i16_2 = std.meta.Vector(2, i16);
+pub const u32_2 = std.meta.Vector(2, u32);
 
-const i8_2 = struct {
-    x: i8,
-    y: i8,
-};
+const MineSweeperBoardExtentMin = u32_2{ 5, 5 };
+const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
 
-pub const u16_2 = struct {
-    x: u16,
-    y: u16,
-};
-
-const u32_2 = std.meta.Vector(2, u32);
-
-const neighborhood_offset_table = [9]i8_2{
-    i8_2{ .x = -1, .y = -1 },
-    i8_2{ .x = -1, .y = 0 },
-    i8_2{ .x = -1, .y = 1 },
-    i8_2{ .x = 0, .y = -1 },
-    i8_2{ .x = 0, .y = 1 },
-    i8_2{ .x = 1, .y = -1 },
-    i8_2{ .x = 1, .y = -0 },
-    i8_2{ .x = 1, .y = 1 },
-    i8_2{ .x = 0, .y = 0 }, // Center position at the end so we can easily ignore it
+const neighborhood_offset_table = [9]i16_2{
+    i16_2{ -1, -1 },
+    i16_2{ -1, 0 },
+    i16_2{ -1, 1 },
+    i16_2{ 0, -1 },
+    i16_2{ 0, 1 },
+    i16_2{ 1, -1 },
+    i16_2{ 1, -0 },
+    i16_2{ 1, 1 },
+    i16_2{ 0, 0 }, // Center position at the end so we can easily ignore it
 };
 
 pub const CellState = struct {
@@ -40,8 +30,7 @@ pub const CellState = struct {
 };
 
 pub const GameState = struct {
-    extent_x: u32,
-    extent_y: u32,
+    extent: u32_2,
     mine_count: u32,
     board: [][]CellState,
     rng: *std.rand.Random,
@@ -55,18 +44,30 @@ pub const GameState = struct {
     children_array_index: usize,
 };
 
-// Creates blank board without mines
-pub fn create_game_state(extent_x: u32, extent_y: u32, mine_count: u32, rng: *std.rand.Random) !GameState {
-    assert(extent_x >= MineSweeperBoardExtentMinX and extent_y >= MineSweeperBoardExtentMinY);
-    assert(extent_x <= MineSweeperBoardExtentMaxX and extent_y <= MineSweeperBoardExtentMaxY);
+pub fn cell_at(game: *GameState, position: u32_2) *CellState {
+    return &game.board[position[0]][position[1]];
+}
 
-    const cell_count = extent_x * extent_y;
+// I borrowed this name from HLSL
+fn all(vector: anytype) bool {
+    return @reduce(.And, vector);
+}
+
+fn any(vector: anytype) bool {
+    return @reduce(.Or, vector);
+}
+
+// Creates blank board without mines
+pub fn create_game_state(extent: u32_2, mine_count: u32, rng: *std.rand.Random) !GameState {
+    assert(all(extent >= MineSweeperBoardExtentMin));
+    assert(all(extent <= MineSweeperBoardExtentMax));
+
+    const cell_count = extent[0] * extent[1];
     assert(mine_count > 0);
     assert(mine_count <= (cell_count - 9) / 2); // 9 is to take into account the starting position that has no mines in the neighborhood
 
     var game: GameState = undefined;
-    game.extent_x = extent_x;
-    game.extent_y = extent_y;
+    game.extent = extent;
     game.mine_count = mine_count;
     game.rng = rng;
     game.is_first_move = true;
@@ -76,11 +77,11 @@ pub fn create_game_state(extent_x: u32, extent_y: u32, mine_count: u32, rng: *st
 
     const allocator: *std.mem.Allocator = std.heap.page_allocator;
 
-    game.board = try allocator.alloc([]CellState, extent_x);
+    game.board = try allocator.alloc([]CellState, extent[0]);
     errdefer allocator.free(game.board);
 
     for (game.board) |*column| {
-        column.* = try allocator.alloc(CellState, extent_y);
+        column.* = try allocator.alloc(CellState, extent[1]);
         errdefer allocator.free(column);
 
         for (column.*) |*cell| {
@@ -94,13 +95,13 @@ pub fn create_game_state(extent_x: u32, extent_y: u32, mine_count: u32, rng: *st
     }
 
     // Allocate array to hold events
-    const max_events = extent_x * extent_y + 2000;
+    const max_events = cell_count + 2000;
 
     game.event_history = try allocator.alloc(GameEvent, max_events);
     errdefer allocator.free(game.event_history);
 
     // Allocate array to hold children discovered in events
-    game.children_array = try allocator.alloc(u16_2, extent_x * extent_y);
+    game.children_array = try allocator.alloc(u16_2, cell_count);
     errdefer allocator.free(game.children_array);
 
     // Placement of mines is done on the first player input
@@ -122,8 +123,7 @@ pub fn destroy_game_state(game: *GameState) void {
 
 // Process an oncover events and propagates the state on the board.
 pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
-    assert(uncover_pos.x < game.extent_x);
-    assert(uncover_pos.y < game.extent_y);
+    assert(all(uncover_pos < game.extent));
 
     if (game.is_first_move) {
         fill_mines(game, uncover_pos);
@@ -133,7 +133,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
     if (game.is_ended)
         return;
 
-    var uncovered_cell = &game.board[uncover_pos.x][uncover_pos.y];
+    var uncovered_cell = cell_at(game, uncover_pos);
 
     if (uncovered_cell.is_flagged) {
         return; // Nothing to do!
@@ -212,14 +212,13 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 
     // Randomly place the mines on the board
     while (remaining_mines > 0) {
-        const random_x = game.rng.uintLessThan(u32, game.extent_x);
-        const random_y = game.rng.uintLessThan(u32, game.extent_y);
+        const random_pos = u32_2{ game.rng.uintLessThan(u32, game.extent[0]), game.rng.uintLessThan(u32, game.extent[1]) };
 
         // Do not generate mines where the player starts
-        if (is_neighbor(u32_2{ random_x, random_y }, u32_2{ start.x, start.y }) catch false)
+        if (is_neighbor(random_pos, start) catch false)
             continue;
 
-        var random_cell = &game.board[random_x][random_y];
+        var random_cell = cell_at(game, random_pos);
 
         if (random_cell.is_mine)
             continue;
@@ -228,16 +227,13 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 
         // Increment the counts for neighboring cells
         for (neighborhood_offset_table[0..9]) |offset| {
-            const target_x = @intCast(i16, random_x) + offset.x;
-            const target_y = @intCast(i16, random_y) + offset.y;
+            const target = @intCast(i16_2, random_pos) + offset;
 
             // Out of bounds
-            if (target_x < 0 or target_y < 0)
-                continue;
-            if (target_x >= game.extent_x or target_y >= game.extent_y)
+            if (any(target < i16_2{ 0, 0 }) or any(target >= game.extent))
                 continue;
 
-            game.board[@intCast(u16, target_x)][@intCast(u16, target_y)].mine_neighbors += 1;
+            cell_at(game, @intCast(u16_2, target)).mine_neighbors += 1;
         }
 
         remaining_mines -= 1;
@@ -247,7 +243,7 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 // Discovers all cells adjacents to a zero-neighbor cell
 // Careful, this function is recursive.
 pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
-    var cell = &game.board[uncover_pos.x][uncover_pos.y];
+    var cell = cell_at(game, uncover_pos);
 
     assert(cell.mine_neighbors == 0);
 
@@ -257,21 +253,15 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     game.children_array_index += 1;
 
     for (neighborhood_offset_table[0..8]) |offset| {
-        const target_x = @intCast(i16, uncover_pos.x) + offset.x;
-        const target_y = @intCast(i16, uncover_pos.y) + offset.y;
+        const target = @intCast(i16_2, uncover_pos) + offset;
 
         // Out of bounds
-        if (target_x < 0 or target_y < 0)
-            continue;
-        if (target_x >= game.extent_x or target_y >= game.extent_y)
+        if (any(target < i16_2{ 0, 0 }) or any(target >= game.extent))
             continue;
 
-        const utarget = u16_2{
-            .x = @intCast(u16, target_x),
-            .y = @intCast(u16, target_y),
-        };
+        const utarget = @intCast(u16_2, target);
 
-        var target_cell = &game.board[utarget.x][utarget.y];
+        var target_cell = cell_at(game, utarget);
 
         if (!target_cell.is_covered)
             continue;
@@ -300,23 +290,16 @@ pub fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *Ce
     var flag_count: u32 = 0;
 
     for (neighborhood_offset_table[0..8]) |offset| {
-        const target_x = @intCast(i16, number_pos.x) + offset.x;
-        const target_y = @intCast(i16, number_pos.y) + offset.y;
+        const target = @intCast(i16_2, number_pos) + offset;
 
         // Out of bounds
-        if (target_x < 0 or target_y < 0)
-            continue;
-        if (target_x >= game.extent_x or target_y >= game.extent_y)
+        if (any(target < i16_2{ 0, 0 }) or any(target >= game.extent))
             continue;
 
-        const utarget = u16_2{
-            .x = @intCast(u16, target_x),
-            .y = @intCast(u16, target_y),
-        };
+        const utarget = @intCast(u16_2, target);
+        var target_cell = cell_at(game, utarget);
 
-        var target_cell = &game.board[utarget.x][utarget.y];
-
-        assert(!(!target_cell.is_covered and target_cell.is_flagged));
+        assert(target_cell.is_covered or !target_cell.is_flagged);
 
         if (target_cell.is_flagged) {
             flag_count += 1;
@@ -340,13 +323,12 @@ pub fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *Ce
 }
 
 pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
-    assert(flag_pos.x < game.extent_x);
-    assert(flag_pos.y < game.extent_y);
+    assert(all(flag_pos < game.extent));
 
     if (game.is_first_move or game.is_ended)
         return;
 
-    var cell = &game.board[flag_pos.x][flag_pos.y];
+    var cell = cell_at(game, flag_pos);
 
     if (!cell.is_covered)
         return;
@@ -363,34 +345,4 @@ pub fn is_board_won(board: [][]CellState) bool {
     }
 
     return true;
-}
-
-pub fn debug_print(game: *GameState) !void {
-    var y: u16 = 0;
-    while (y < game.extent_y) {
-        var x: u16 = 0;
-        while (x < game.extent_x) {
-            const cell = game.board[x][y];
-
-            if (cell.is_covered) {
-                if (cell.is_flagged) {
-                    std.debug.print("F", .{});
-                } else {
-                    std.debug.print("-", .{});
-                }
-            } else if (cell.mine_neighbors > 0) {
-                const c: u8 = '0' + @intCast(u8, cell.mine_neighbors);
-                const str = [_]u8{ c, 0 };
-                std.debug.print("{s}", .{&str});
-            } else if (cell.is_mine) {
-                std.debug.print("x", .{});
-            } else std.debug.print(" ", .{});
-
-            std.debug.print(" ", .{});
-            x += 1;
-        }
-
-        std.debug.print("\n", .{});
-        y += 1;
-    }
 }
