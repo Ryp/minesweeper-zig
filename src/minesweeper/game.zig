@@ -36,6 +36,7 @@ pub const GameState = struct {
     rng: std.rand.Xoroshiro128, // Hardcode PRNG type for forward compatibility
     is_first_move: bool,
     is_ended: bool,
+    flag_count: u32,
 
     // Storage for game events
     event_history: []GameEvent,
@@ -74,6 +75,7 @@ pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_coun
     game.rng = std.rand.Xoroshiro128.init(seed);
     game.is_first_move = true;
     game.is_ended = false;
+    game.flag_count = 0;
     game.children_array_index = 0;
     game.event_history_index = 0;
 
@@ -158,19 +160,42 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         append_discover_single_event(game, uncover_pos);
     }
 
-    // Did we lose?
-    if (uncovered_cell.is_mine) {
-        // Uncover all mines
+    check_win_conditions(game);
+}
+
+pub fn check_win_conditions(game: *GameState) void {
+    assert(!game.is_ended);
+
+    {
+        // Did we lose?
+        // It's possible to lose by doing a wrong number discover.
+        // That means we potentially lose on another cell, or multiple
+        // other cells - so we check the full board here.
+        // Also we count the flags here since we're at it.
+        game.flag_count = 0;
         for (game.board) |column| {
             for (column) |*cell| {
-                if (cell.is_mine)
-                    cell.is_covered = false;
+                // Oops!
+                if (cell.is_mine and !cell.is_covered) {
+                    game.is_ended = true;
+                }
+
+                if (cell.is_flagged)
+                    game.flag_count += 1;
             }
         }
 
-        game.is_ended = true;
-        append_game_end_event(game, GameResult.Lose);
-        return;
+        if (game.is_ended) {
+            // Uncover all mines
+            for (game.board) |column| {
+                for (column) |*cell| {
+                    if (cell.is_mine)
+                        cell.is_covered = false;
+                }
+            }
+
+            append_game_end_event(game, GameResult.Lose);
+        }
     }
 
     // Did we win?
@@ -179,7 +204,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         for (game.board) |column| {
             for (column) |*cell| {
                 if (cell.is_mine) {
-                    cell.is_flagged = true;
+                    cell.is_flagged = true; // FIXME flag state
                 } else {
                     cell.is_covered = false;
                 }
@@ -188,7 +213,6 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
         game.is_ended = true;
         append_game_end_event(game, GameResult.Win);
-        return;
     }
 }
 
@@ -243,8 +267,6 @@ pub fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     var cell = cell_at(game, uncover_pos);
 
     assert(cell.mine_neighbors == 0);
-
-    assert(cell.is_covered);
 
     // If the user put an invalid flag there by mistake, we clear it for him
     // NOTE: That can only happens in recursive calls.
@@ -344,6 +366,12 @@ pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
 
     if (!cell.is_covered)
         return;
+
+    if (cell.is_flagged) {
+        game.flag_count -= 1;
+    } else {
+        game.flag_count += 1;
+    }
 
     cell.is_flagged = !cell.is_flagged;
 }

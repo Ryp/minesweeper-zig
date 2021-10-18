@@ -83,12 +83,6 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
     };
     defer c.SDL_DestroyRenderer(ren);
 
-    // FIXME find a way to null-terminate strings from allocPrint()
-    const string = try std.fmt.allocPrint(allocator, "Minesweeper {d}x{d} with {d} mines {c}", .{ game_state.extent[0], game_state.extent[1], game_state.mine_count, 0 });
-    defer allocator.free(string);
-
-    c.SDL_SetWindowTitle(window, string.ptr);
-
     // Create sprite sheet
     // FIXME Using relative path for now
     const sprite_sheet_tile_extent = 19;
@@ -138,6 +132,12 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                 else => {},
             }
         }
+
+        // FIXME find a better way to null-terminate strings from allocPrint()
+        const string = try std.fmt.allocPrint(allocator, "Minesweeper {d}x{d} with {d}/{d} mines {c}", .{ game_state.extent[0], game_state.extent[1], game_state.flag_count, game_state.mine_count, 0 });
+        defer allocator.free(string);
+
+        c.SDL_SetWindowTitle(window, string.ptr);
 
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
@@ -200,7 +200,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                     const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
 
                     const sprite_sheet_rect = c.SDL_Rect{
-                        .x = 6 * sprite_sheet_tile_extent,
+                        .x = 8 * sprite_sheet_tile_extent,
                         .y = 1 * sprite_sheet_tile_extent,
                         .w = sprite_sheet_tile_extent,
                         .h = sprite_sheet_tile_extent,
