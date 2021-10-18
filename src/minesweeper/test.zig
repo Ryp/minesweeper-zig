@@ -29,6 +29,29 @@ test "Critical path" {
     try expectEqual(cell_at(&game_state, uncover_pos_1).is_covered, false);
 }
 
+test "Toggle flag" {
+    const extent = u32_2{ 5, 5 };
+    const mine_count: u32 = 2;
+    const uncover_pos_0 = u16_2{ 2, 2 };
+    const uncover_pos_1 = u16_2{ 0, 1 };
+
+    var rng = std.rand.DefaultPrng.init(test_seed);
+
+    var game_state = try create_game_state(extent, mine_count, &rng.random);
+    defer destroy_game_state(&game_state);
+
+    uncover(&game_state, uncover_pos_0);
+    try expectEqual(cell_at(&game_state, uncover_pos_0).is_covered, false);
+
+    toggle_flag(&game_state, uncover_pos_1);
+    uncover(&game_state, uncover_pos_1);
+    try expectEqual(cell_at(&game_state, uncover_pos_1).is_covered, true);
+
+    toggle_flag(&game_state, uncover_pos_1);
+    uncover(&game_state, uncover_pos_1);
+    try expectEqual(cell_at(&game_state, uncover_pos_1).is_covered, false);
+}
+
 test "Big uncover" {
     const extent = u32_2{ 100, 100 };
     const mine_count: u32 = 1;
