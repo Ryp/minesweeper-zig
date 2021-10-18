@@ -156,8 +156,8 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
         _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hovered_cell_x = @intCast(u16, @divTrunc(mouse_x, scale));
-        const hovered_cell_y = @intCast(u16, @divTrunc(mouse_y, scale));
+        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[0], @divTrunc(mouse_x, scale))));
+        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[1], @divTrunc(mouse_y, scale))));
 
         for (gfx_board) |column| {
             for (column) |*cell| {
@@ -165,7 +165,6 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                 cell.invalid_move_time_secs = std.math.max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
             }
         }
-        // FIXME OOB handling
         gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
 
         // Process game events for the gfx side
