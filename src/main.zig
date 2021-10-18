@@ -23,10 +23,8 @@ pub fn main() !void {
     std.crypto.random.bytes(buf[0..]);
     const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
 
-    var rng = std.rand.DefaultPrng.init(seed);
-
     // Create game state
-    var game_state = try minesweeper.create_game_state(.{ extent_x, extent_y }, mine_count, &rng.random);
+    var game_state = try minesweeper.create_game_state(.{ extent_x, extent_y }, mine_count, seed);
     defer minesweeper.destroy_game_state(&game_state);
 
     try sdl2.execute_main_loop(&game_state);

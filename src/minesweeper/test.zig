@@ -13,9 +13,7 @@ test "Critical path" {
     const uncover_pos_0 = u16_2{ 2, 2 };
     const uncover_pos_1 = u16_2{ 0, 1 };
 
-    var rng = std.rand.DefaultPrng.init(test_seed);
-
-    var game_state = try create_game_state(extent, mine_count, &rng.random);
+    var game_state = try create_game_state(extent, mine_count, test_seed);
     defer destroy_game_state(&game_state);
 
     uncover(&game_state, uncover_pos_0);
@@ -35,9 +33,7 @@ test "Toggle flag" {
     const uncover_pos_0 = u16_2{ 2, 2 };
     const uncover_pos_1 = u16_2{ 0, 1 };
 
-    var rng = std.rand.DefaultPrng.init(test_seed);
-
-    var game_state = try create_game_state(extent, mine_count, &rng.random);
+    var game_state = try create_game_state(extent, mine_count, test_seed);
     defer destroy_game_state(&game_state);
 
     uncover(&game_state, uncover_pos_0);
@@ -57,9 +53,7 @@ test "Big uncover" {
     const mine_count: u32 = 1;
     const start_pos = u16_2{ 25, 25 };
 
-    var rng = std.rand.DefaultPrng.init(test_seed);
-
-    var game_state = try create_game_state(extent, mine_count, &rng.random);
+    var game_state = try create_game_state(extent, mine_count, test_seed);
     defer destroy_game_state(&game_state);
 
     uncover(&game_state, start_pos);
@@ -71,9 +65,7 @@ test "Number uncover" {
     const extent = u32_2{ 5, 5 };
     const mine_count: u32 = 3;
 
-    var rng = std.rand.DefaultPrng.init(test_seed);
-
-    var game_state = try create_game_state(extent, mine_count, &rng.random);
+    var game_state = try create_game_state(extent, mine_count, test_seed);
     defer destroy_game_state(&game_state);
 
     uncover(&game_state, .{ 0, 0 });

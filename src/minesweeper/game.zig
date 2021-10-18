@@ -33,7 +33,7 @@ pub const GameState = struct {
     extent: u32_2,
     mine_count: u32,
     board: [][]CellState,
-    rng: *std.rand.Random,
+    rng: std.rand.Xoroshiro128, // Hardcode PRNG type for forward compatibility
     is_first_move: bool,
     is_ended: bool,
 
@@ -58,7 +58,7 @@ fn any(vector: anytype) bool {
 }
 
 // Creates blank board without mines
-pub fn create_game_state(extent: u32_2, mine_count: u32, rng: *std.rand.Random) !GameState {
+pub fn create_game_state(extent: u32_2, mine_count: u32, seed: u64) !GameState {
     assert(all(extent >= MineSweeperBoardExtentMin));
     assert(all(extent <= MineSweeperBoardExtentMax));
 
@@ -69,7 +69,7 @@ pub fn create_game_state(extent: u32_2, mine_count: u32, rng: *std.rand.Random) 
     var game: GameState = undefined;
     game.extent = extent;
     game.mine_count = mine_count;
-    game.rng = rng;
+    game.rng = std.rand.Xoroshiro128.init(seed);
     game.is_first_move = true;
     game.is_ended = false;
     game.children_array_index = 0;
@@ -212,7 +212,7 @@ pub fn fill_mines(game: *GameState, start: u16_2) void {
 
     // Randomly place the mines on the board
     while (remaining_mines > 0) {
-        const random_pos = u32_2{ game.rng.uintLessThan(u32, game.extent[0]), game.rng.uintLessThan(u32, game.extent[1]) };
+        const random_pos = u32_2{ game.rng.random.uintLessThan(u32, game.extent[0]), game.rng.random.uintLessThan(u32, game.extent[1]) };
 
         // Do not generate mines where the player starts
         if (is_neighbor(random_pos, start) catch false)
