@@ -34,15 +34,15 @@ pub const GameState = struct {
     mine_count: u32,
     board: [][]CellState,
     rng: std.rand.Xoroshiro128, // Hardcode PRNG type for forward compatibility
-    is_first_move: bool,
-    is_ended: bool,
-    flag_count: u32,
+    is_first_move: bool = true,
+    is_ended: bool = false,
+    flag_count: u32 = 0,
 
     // Storage for game events
     event_history: []GameEvent,
-    event_history_index: usize,
+    event_history_index: usize = 0,
     children_array: []u16_2,
-    children_array_index: usize,
+    children_array_index: usize = 0,
 };
 
 pub fn cell_at(game: *GameState, position: u32_2) *CellState {
@@ -66,7 +66,8 @@ fn any(vector: anytype) bool {
     return @reduce(.Or, vector);
 }
 
-// Creates blank board without mines
+// Creates blank board without mines.
+// Placement of mines is done on the first player input.
 pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_count: u32, seed: u64) !GameState {
     assert(all(extent >= MineSweeperBoardExtentMin));
     assert(all(extent <= MineSweeperBoardExtentMax));
@@ -75,20 +76,11 @@ pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_coun
     assert(mine_count > 0);
     assert(mine_count <= (cell_count - 9) / 2); // 9 is to take into account the starting position that has no mines in the neighborhood
 
-    var game: GameState = undefined;
-    game.extent = extent;
-    game.mine_count = mine_count;
-    game.rng = std.rand.Xoroshiro128.init(seed);
-    game.is_first_move = true;
-    game.is_ended = false;
-    game.flag_count = 0;
-    game.children_array_index = 0;
-    game.event_history_index = 0;
+    // Allocate board
+    const board = try allocator.alloc([]CellState, extent[0]);
+    errdefer allocator.free(board);
 
-    game.board = try allocator.alloc([]CellState, extent[0]);
-    errdefer allocator.free(game.board);
-
-    for (game.board) |*column| {
+    for (board) |*column| {
         column.* = try allocator.alloc(CellState, extent[1]);
         errdefer allocator.free(column);
 
@@ -100,15 +92,21 @@ pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_coun
     // Allocate array to hold events
     const max_events = cell_count + 2000;
 
-    game.event_history = try allocator.alloc(GameEvent, max_events);
-    errdefer allocator.free(game.event_history);
+    const event_history = try allocator.alloc(GameEvent, max_events);
+    errdefer allocator.free(event_history);
 
-    // Allocate array to hold children discovered in events
-    game.children_array = try allocator.alloc(u16_2, cell_count);
-    errdefer allocator.free(game.children_array);
+    // Allocate array to hold cells discovered in events
+    const children_array = try allocator.alloc(u16_2, cell_count);
+    errdefer allocator.free(children_array);
 
-    // Placement of mines is done on the first player input
-    return game;
+    return GameState{
+        .extent = extent,
+        .mine_count = mine_count,
+        .rng = std.rand.Xoroshiro128.init(seed),
+        .board = board,
+        .event_history = event_history,
+        .children_array = children_array,
+    };
 }
 
 pub fn destroy_game_state(allocator: *std.mem.Allocator, game: *GameState) void {
@@ -276,7 +274,7 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     assert(cell.mine_neighbors == 0);
 
     // If the user put an invalid flag there by mistake, we clear it for him
-    // NOTE: That can only happens in recursive calls.
+    // That can only happens in recursive calls.
     cell.is_flagged = false;
     cell.is_covered = false;
 
