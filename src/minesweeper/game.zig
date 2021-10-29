@@ -10,6 +10,7 @@ pub const u32_2 = std.meta.Vector(2, u32);
 const MineSweeperBoardExtentMin = u32_2{ 5, 5 };
 const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
 const UncoverAllMinesAfterLosing = true;
+const EnableGuessFlag = true;
 
 const neighborhood_offset_table = [9]i16_2{
     i16_2{ -1, -1 },
@@ -23,10 +24,16 @@ const neighborhood_offset_table = [9]i16_2{
     i16_2{ 0, 0 }, // Center position at the end so we can easily ignore it
 };
 
+pub const Marking = enum {
+    None,
+    Flag,
+    Guess,
+};
+
 pub const CellState = struct {
     is_mine: bool = false,
     is_covered: bool = true,
-    is_flagged: bool = false,
+    marking: Marking = Marking.None,
     mine_neighbors: u4 = 0,
 };
 
@@ -135,7 +142,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
     var uncovered_cell = cell_at(game, uncover_pos);
 
-    if (uncovered_cell.is_flagged) {
+    if (uncovered_cell.marking == Marking.Flag) {
         return; // Nothing happens!
     }
 
@@ -189,7 +196,7 @@ fn check_win_conditions(game: *GameState) void {
                     game.children_array_index += 1;
                 }
 
-                if (cell.is_flagged)
+                if (cell.marking == Marking.Flag)
                     game.flag_count += 1;
             }
         }
@@ -219,7 +226,7 @@ fn check_win_conditions(game: *GameState) void {
             for (column) |*cell| {
                 if (cell.is_mine) {
                     // Here we should update the flag count but since we won there's no need
-                    cell.is_flagged = true;
+                    cell.marking = Marking.Flag;
                 } else {
                     cell.is_covered = false;
                 }
@@ -285,7 +292,7 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
 
     // If the user put an invalid flag there by mistake, we clear it for him
     // That can only happens in recursive calls.
-    cell.is_flagged = false;
+    cell.marking = Marking.None;
     cell.is_covered = false;
 
     game.children_array[game.children_array_index] = uncover_pos;
@@ -338,9 +345,9 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
         const utarget = @intCast(u16_2, target);
         var target_cell = cell_at(game, utarget);
 
-        assert(target_cell.is_covered or !target_cell.is_flagged);
+        assert(target_cell.is_covered or target_cell.marking == Marking.None);
 
-        if (target_cell.is_flagged) {
+        if (target_cell.marking == Marking.Flag) {
             flag_count += 1;
         } else if (target_cell.is_covered) {
             candidates[candidate_count] = utarget;
@@ -354,7 +361,7 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
             const candidate_pos = candidates[candidate_index];
             var cell = cell_at(game, candidate_pos);
 
-            assert(cell.is_flagged == false);
+            assert(cell.marking != Marking.Flag);
 
             // We might trigger second-hand big uncovers!
             if (cell.mine_neighbors == 0) {
@@ -382,13 +389,21 @@ pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
     if (!cell.is_covered)
         return;
 
-    if (cell.is_flagged) {
-        game.flag_count -= 1;
-    } else {
-        game.flag_count += 1;
+    switch (cell.marking) {
+        Marking.None => {
+            cell.marking = Marking.Flag;
+            game.flag_count += 1;
+        },
+        Marking.Flag => {
+            if (EnableGuessFlag) {
+                cell.marking = Marking.Guess;
+            } else cell.marking = Marking.None;
+            game.flag_count -= 1;
+        },
+        Marking.Guess => {
+            cell.marking = Marking.None;
+        },
     }
-
-    cell.is_flagged = !cell.is_flagged;
 }
 
 fn is_board_won(board: [][]CellState) bool {

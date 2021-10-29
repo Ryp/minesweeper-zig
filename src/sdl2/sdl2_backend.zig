@@ -20,13 +20,16 @@ const GfxState = struct {
 fn get_tile_index(cell: minesweeper.CellState, gfx_cell: GfxState, is_game_ended: bool) [2]u8 {
     if (cell.is_covered) {
         var index_x: u8 = 0;
-        if (cell.is_flagged) {
+        if (cell.marking == minesweeper.Marking.Flag) {
             if (is_game_ended and !cell.is_mine) {
                 index_x = 8;
             } else {
                 index_x = 2;
             }
+        } else if (cell.marking == minesweeper.Marking.Guess) {
+            index_x = 4;
         }
+
         if (gfx_cell.is_hovered and !is_game_ended)
             index_x += 1;
         return .{ index_x, 1 };
