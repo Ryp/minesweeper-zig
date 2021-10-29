@@ -12,11 +12,12 @@ const SpriteScreenExtent = 38;
 const InvalidMoveTimeSecs: f32 = 0.3;
 
 const GfxState = struct {
-    is_hovered: bool = false,
     invalid_move_time_secs: f32 = 0.0,
+    is_hovered: bool = false,
+    is_exploded: bool = false,
 };
 
-fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool, is_game_ended: bool) [2]u8 {
+fn get_tile_index(cell: minesweeper.CellState, gfx_cell: GfxState, is_game_ended: bool) [2]u8 {
     if (cell.is_covered) {
         var index_x: u8 = 0;
         if (cell.is_flagged) {
@@ -26,12 +27,15 @@ fn get_tile_index(cell: minesweeper.CellState, is_hovered: bool, is_game_ended: 
                 index_x = 2;
             }
         }
-        if (is_hovered and !is_game_ended)
+        if (gfx_cell.is_hovered and !is_game_ended)
             index_x += 1;
         return .{ index_x, 1 };
     } else {
-        if (cell.is_mine)
-            return .{ 6, 1 };
+        if (cell.is_mine) {
+            if (gfx_cell.is_exploded) {
+                return .{ 7, 1 };
+            } else return .{ 6, 1 };
+        }
 
         return .{ cell.mine_neighbors, 0 };
     }
@@ -173,6 +177,11 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
                         gfx_board[event.location[0]][event.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
+                minesweeper.GameEventTag.game_end => |event| {
+                    for (event.exploded_mines) |mine_location| {
+                        gfx_board[mine_location[0]][mine_location[1]].is_exploded = true;
+                    }
+                },
                 else => {},
             }
         }
@@ -196,7 +205,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
 
                 // Draw base cell sprite
                 {
-                    const sprite_sheet_pos = get_tile_index(cell, gfx_cell.is_hovered, game_state.is_ended);
+                    const sprite_sheet_pos = get_tile_index(cell, gfx_cell, game_state.is_ended);
                     const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
 
                     _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);

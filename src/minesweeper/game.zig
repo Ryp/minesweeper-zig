@@ -9,6 +9,7 @@ pub const u32_2 = std.meta.Vector(2, u32);
 
 const MineSweeperBoardExtentMin = u32_2{ 5, 5 };
 const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
+const UncoverAllMinesAfterLosing = true;
 
 const neighborhood_offset_table = [9]i16_2{
     i16_2{ -1, -1 },
@@ -176,12 +177,16 @@ fn check_win_conditions(game: *GameState) void {
         // That means we potentially lose on another cell, or multiple
         // other cells - so we check the full board here.
         // Also we count the flags here since we're at it.
+        const start_children = game.children_array_index;
+
         game.flag_count = 0;
-        for (game.board) |column| {
-            for (column) |*cell| {
+        for (game.board) |column, x| {
+            for (column) |*cell, y| {
                 // Oops!
                 if (cell.is_mine and !cell.is_covered) {
                     game.is_ended = true;
+                    game.children_array[game.children_array_index] = .{ @intCast(u16, x), @intCast(u16, y) };
+                    game.children_array_index += 1;
                 }
 
                 if (cell.is_flagged)
@@ -189,16 +194,21 @@ fn check_win_conditions(game: *GameState) void {
             }
         }
 
+        const end_children = game.children_array_index;
+
         if (game.is_ended) {
-            // Uncover all mines
-            for (game.board) |column| {
-                for (column) |*cell| {
-                    if (cell.is_mine)
-                        cell.is_covered = false;
+            assert(end_children > start_children);
+
+            if (UncoverAllMinesAfterLosing) {
+                for (game.board) |column| {
+                    for (column) |*cell| {
+                        if (cell.is_mine)
+                            cell.is_covered = false;
+                    }
                 }
             }
 
-            append_game_end_event(game, GameResult.Lose);
+            append_game_end_event(game, GameResult.Lose, game.children_array[start_children..end_children]);
         }
     }
 
@@ -217,7 +227,7 @@ fn check_win_conditions(game: *GameState) void {
         }
 
         game.is_ended = true;
-        append_game_end_event(game, GameResult.Win);
+        append_game_end_event(game, GameResult.Win, game.children_array[0..0]);
     }
 }
 

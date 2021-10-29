@@ -21,6 +21,7 @@ pub const GameResult = enum {
 
 pub const GameEndEvent = struct {
     result: GameResult,
+    exploded_mines: []u16_2,
 };
 
 pub const GameEventTag = enum {
@@ -73,11 +74,12 @@ pub fn append_discover_number_event(game: *GameState, location: u16_2, children:
     };
 }
 
-pub fn append_game_end_event(game: *GameState, result: GameResult) void {
+pub fn append_game_end_event(game: *GameState, result: GameResult, exploded_mines: []u16_2) void {
     var new_event = allocate_new_event(game);
     new_event.* = GameEvent{
         .game_end = GameEndEvent{
             .result = result,
+            .exploded_mines = exploded_mines,
         },
     };
 }
