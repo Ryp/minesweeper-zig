@@ -1,11 +1,14 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-usingnamespace @import("event.zig");
+const event = @import("event.zig");
+const GameEvent = event.GameEvent;
+const GameResult = event.GameResult;
 
-pub const u16_2 = std.meta.Vector(2, u16);
-pub const i16_2 = std.meta.Vector(2, i16);
-pub const u32_2 = std.meta.Vector(2, u32);
+// FIXME Check https://github.com/ziglang/zig/issues/10421
+pub const @"u16_2" = std.meta.Vector(2, u16);
+pub const @"i16_2" = std.meta.Vector(2, i16);
+pub const @"u32_2" = std.meta.Vector(2, u32);
 
 const MineSweeperBoardExtentMin = u32_2{ 5, 5 };
 const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
@@ -76,7 +79,7 @@ fn any(vector: anytype) bool {
 
 // Creates blank board without mines.
 // Placement of mines is done on the first player input.
-pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_count: u32, seed: u64) !GameState {
+pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, mine_count: u32, seed: u64) !GameState {
     assert(all(extent >= MineSweeperBoardExtentMin));
     assert(all(extent <= MineSweeperBoardExtentMax));
 
@@ -117,7 +120,7 @@ pub fn create_game_state(allocator: *std.mem.Allocator, extent: u32_2, mine_coun
     };
 }
 
-pub fn destroy_game_state(allocator: *std.mem.Allocator, game: *GameState) void {
+pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.children_array);
     allocator.free(game.event_history);
 
@@ -154,7 +157,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
             const end_children = game.children_array_index;
 
-            append_discover_number_event(game, uncover_pos, game.children_array[start_children..end_children]);
+            event.append_discover_number_event(game, uncover_pos, game.children_array[start_children..end_children]);
         } else {
             return; // Nothing happens!
         }
@@ -166,10 +169,10 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
         const end_children = game.children_array_index;
 
-        append_discover_many_event(game, uncover_pos, game.children_array[start_children..end_children]);
+        event.append_discover_many_event(game, uncover_pos, game.children_array[start_children..end_children]);
     } else {
         uncovered_cell.is_covered = false;
-        append_discover_single_event(game, uncover_pos);
+        event.append_discover_single_event(game, uncover_pos);
     }
 
     check_win_conditions(game);
@@ -215,7 +218,7 @@ fn check_win_conditions(game: *GameState) void {
                 }
             }
 
-            append_game_end_event(game, GameResult.Lose, game.children_array[start_children..end_children]);
+            event.append_game_end_event(game, GameResult.Lose, game.children_array[start_children..end_children]);
         }
     }
 
@@ -234,7 +237,7 @@ fn check_win_conditions(game: *GameState) void {
         }
 
         game.is_ended = true;
-        append_game_end_event(game, GameResult.Win, game.children_array[0..0]);
+        event.append_game_end_event(game, GameResult.Win, game.children_array[0..0]);
     }
 }
 
@@ -254,7 +257,7 @@ fn fill_mines(game: *GameState, start: u16_2) void {
 
     // Randomly place the mines on the board
     while (remaining_mines > 0) {
-        const random_pos = u32_2{ game.rng.random.uintLessThan(u32, game.extent[0]), game.rng.random.uintLessThan(u32, game.extent[1]) };
+        const random_pos = u32_2{ game.rng.random().uintLessThan(u32, game.extent[0]), game.rng.random().uintLessThan(u32, game.extent[1]) };
 
         // Do not generate mines where the player starts
         if (is_neighbor(random_pos, start) catch false)

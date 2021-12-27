@@ -5,7 +5,10 @@ const c = @cImport({
     @cInclude("SDL2/SDL.h");
 });
 
-const minesweeper = @import("../minesweeper/game.zig");
+const game = @import("../minesweeper/game.zig");
+const GameState = game.GameState;
+const event = @import("../minesweeper/event.zig");
+const GameEventTag = event.GameEventTag;
 
 const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 38;
@@ -17,16 +20,16 @@ const GfxState = struct {
     is_exploded: bool = false,
 };
 
-fn get_tile_index(cell: minesweeper.CellState, gfx_cell: GfxState, is_game_ended: bool) [2]u8 {
+fn get_tile_index(cell: game.CellState, gfx_cell: GfxState, is_game_ended: bool) [2]u8 {
     if (cell.is_covered) {
         var index_x: u8 = 0;
-        if (cell.marking == minesweeper.Marking.Flag) {
+        if (cell.marking == game.Marking.Flag) {
             if (is_game_ended and !cell.is_mine) {
                 index_x = 8;
             } else {
                 index_x = 2;
             }
-        } else if (cell.marking == minesweeper.Marking.Guess) {
+        } else if (cell.marking == game.Marking.Guess) {
             index_x = 4;
         }
 
@@ -53,7 +56,7 @@ fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
     };
 }
 
-fn allocate_2d_array_default_init(comptime T: type, allocator: *std.mem.Allocator, x: usize, y: usize) ![][]T {
+fn allocate_2d_array_default_init(comptime T: type, allocator: std.mem.Allocator, x: usize, y: usize) ![][]T {
     var array = try allocator.alloc([]T, x);
     errdefer allocator.free(array);
 
@@ -69,7 +72,7 @@ fn allocate_2d_array_default_init(comptime T: type, allocator: *std.mem.Allocato
     return array;
 }
 
-fn deallocate_2d_array(comptime T: type, allocator: *std.mem.Allocator, array: [][]T) void {
+fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: [][]T) void {
     for (array) |column| {
         allocator.free(column);
     }
@@ -77,7 +80,7 @@ fn deallocate_2d_array(comptime T: type, allocator: *std.mem.Allocator, array: [
     allocator.free(array);
 }
 
-pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper.GameState) !void {
+pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
     const width = game_state.extent[0] * SpriteScreenExtent;
     const height = game_state.extent[1] * SpriteScreenExtent;
 
@@ -93,7 +96,7 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
     };
     defer c.SDL_DestroyWindow(window);
 
-    if (c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1") == c.SDL_bool.SDL_FALSE) {
+    if (c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1") == c.SDL_FALSE) {
         c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
@@ -132,21 +135,21 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&sdlEvent) > 0) {
-            switch (@intToEnum(c.SDL_EventType, @intCast(c_int, sdlEvent.type))) {
-                .SDL_QUIT => {
+            switch (sdlEvent.type) {
+                c.SDL_QUIT => {
                     shouldExit = true;
                 },
-                .SDL_KEYDOWN => {
+                c.SDL_KEYDOWN => {
                     if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE)
                         shouldExit = true;
                 },
-                .SDL_MOUSEBUTTONUP => {
+                c.SDL_MOUSEBUTTONUP => {
                     const x = @intCast(u16, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
                     const y = @intCast(u16, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        minesweeper.uncover(game_state, .{ x, y });
+                        game.uncover(game_state, .{ x, y });
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
-                        minesweeper.toggle_flag(game_state, .{ x, y });
+                        game.toggle_flag(game_state, .{ x, y });
                     }
                 },
                 else => {},
@@ -175,12 +178,12 @@ pub fn execute_main_loop(allocator: *std.mem.Allocator, game_state: *minesweeper
         // Process game events for the gfx side
         for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
             switch (game_event) {
-                minesweeper.GameEventTag.discover_number => |event| {
+                GameEventTag.discover_number => |event| {
                     if (event.children.len == 0) {
                         gfx_board[event.location[0]][event.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
-                minesweeper.GameEventTag.game_end => |event| {
+                GameEventTag.game_end => |event| {
                     for (event.exploded_mines) |mine_location| {
                         gfx_board[mine_location[0]][mine_location[1]].is_exploded = true;
                     }

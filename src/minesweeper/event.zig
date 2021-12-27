@@ -1,4 +1,5 @@
-usingnamespace @import("game.zig");
+const GameState = @import("game.zig").GameState;
+const @"u16_2" = @import("game.zig").u16_2;
 
 pub const DiscoverSingleEvent = struct {
     location: u16_2,
