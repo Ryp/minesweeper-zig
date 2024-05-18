@@ -57,7 +57,7 @@ fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
 }
 
 fn allocate_2d_array_default_init(comptime T: type, allocator: std.mem.Allocator, x: usize, y: usize) ![][]T {
-    var array = try allocator.alloc([]T, x);
+    const array = try allocator.alloc([]T, x);
     errdefer allocator.free(array);
 
     for (array) |*column| {
@@ -90,7 +90,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     }
     defer c.SDL_Quit();
 
-    const window = c.SDL_CreateWindow("Minesweeper", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(c_int, width), @intCast(c_int, height), c.SDL_WINDOW_SHOWN) orelse {
+    const window = c.SDL_CreateWindow("Minesweeper", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), c.SDL_WINDOW_SHOWN) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
@@ -130,7 +130,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
     while (!shouldExit) {
         const current_frame_time_ms: u32 = c.SDL_GetTicks();
-        const frame_delta_secs = @intToFloat(f32, current_frame_time_ms - last_frame_time_ms) * 0.001;
+        const frame_delta_secs = @as(f32, @floatFromInt(current_frame_time_ms - last_frame_time_ms)) * 0.001;
 
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
@@ -144,8 +144,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         shouldExit = true;
                 },
                 c.SDL_MOUSEBUTTONUP => {
-                    const x = @intCast(u16, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
-                    const y = @intCast(u16, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
+                    const x = @as(u16, @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent)));
+                    const y = @as(u16, @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent)));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
                         game.uncover(game_state, .{ x, y });
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
@@ -164,13 +164,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
         _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[0], @divTrunc(mouse_x, SpriteScreenExtent))));
-        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[1], @divTrunc(mouse_y, SpriteScreenExtent))));
+        const hovered_cell_x = @as(u16, @intCast(@max(0, @min(game_state.extent[0], @as(u16, @intCast(@divTrunc(mouse_x, SpriteScreenExtent)))))));
+        const hovered_cell_y = @as(u16, @intCast(@max(0, @min(game_state.extent[1], @as(u16, @intCast(@divTrunc(mouse_y, SpriteScreenExtent)))))));
 
         for (gfx_board) |column| {
             for (column) |*cell| {
                 cell.is_hovered = false;
-                cell.invalid_move_time_secs = std.math.max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
+                cell.invalid_move_time_secs = @max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
             }
         }
         gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
@@ -178,13 +178,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         // Process game events for the gfx side
         for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
             switch (game_event) {
-                GameEventTag.discover_number => |event| {
-                    if (event.children.len == 0) {
-                        gfx_board[event.location[0]][event.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
+                GameEventTag.discover_number => |e| {
+                    if (e.children.len == 0) {
+                        gfx_board[e.location[0]][e.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
-                GameEventTag.game_end => |event| {
-                    for (event.exploded_mines) |mine_location| {
+                GameEventTag.game_end => |e| {
+                    for (e.exploded_mines) |mine_location| {
                         gfx_board[mine_location[0]][mine_location[1]].is_exploded = true;
                     }
                 },
@@ -198,13 +198,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         // Render game
         _ = c.SDL_RenderClear(ren);
 
-        for (game_state.board) |column, i| {
-            for (column) |cell, j| {
+        for (0.., game_state.board) |i, column| {
+            for (0.., column) |j, cell| {
                 const gfx_cell = gfx_board[i][j];
 
                 const sprite_output_pos_rect = c.SDL_Rect{
-                    .x = @intCast(c_int, i * SpriteScreenExtent),
-                    .y = @intCast(c_int, j * SpriteScreenExtent),
+                    .x = @intCast(i * SpriteScreenExtent),
+                    .y = @intCast(j * SpriteScreenExtent),
                     .w = SpriteScreenExtent,
                     .h = SpriteScreenExtent,
                 };
@@ -222,7 +222,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
                     const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
 
-                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @floatToInt(u8, alpha * 255.0));
+                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @intFromFloat(alpha * 255.0));
                     _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
                     _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
                 }
