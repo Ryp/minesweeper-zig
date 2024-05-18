@@ -1,5 +1,7 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const assert = std.debug.assert;
+const native_endian = builtin.cpu.arch.endian();
 
 const sdl2 = @import("sdl2/sdl2_backend.zig");
 const game = @import("minesweeper/game.zig");
@@ -21,7 +23,7 @@ pub fn main() !void {
     // Using the method from the docs to get a reasonably random seed
     var buf: [8]u8 = undefined;
     std.crypto.random.bytes(buf[0..]);
-    const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
+    const seed = std.mem.readInt(u64, buf[0..8], native_endian);
 
     // Create game state
     var game_state = try game.create_game_state(gpa.allocator(), .{ extent_x, extent_y }, mine_count, seed);

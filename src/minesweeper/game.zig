@@ -6,9 +6,9 @@ const GameEvent = event.GameEvent;
 const GameResult = event.GameResult;
 
 // FIXME Check https://github.com/ziglang/zig/issues/10421
-pub const @"u16_2" = std.meta.Vector(2, u16);
-pub const @"i16_2" = std.meta.Vector(2, i16);
-pub const @"u32_2" = std.meta.Vector(2, u32);
+pub const u16_2 = @Vector(2, u16);
+pub const i16_2 = @Vector(2, i16);
+pub const u32_2 = @Vector(2, u32);
 
 const MineSweeperBoardExtentMin = u32_2{ 5, 5 };
 const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
@@ -22,7 +22,7 @@ const neighborhood_offset_table = [9]i16_2{
     i16_2{ 0, -1 },
     i16_2{ 0, 1 },
     i16_2{ 1, -1 },
-    i16_2{ 1, -0 },
+    i16_2{ 1, 0 },
     i16_2{ 1, 1 },
     i16_2{ 0, 0 }, // Center position at the end so we can easily ignore it
 };
@@ -190,12 +190,12 @@ fn check_win_conditions(game: *GameState) void {
         const start_children = game.children_array_index;
 
         game.flag_count = 0;
-        for (game.board) |column, x| {
-            for (column) |*cell, y| {
+        for (0.., game.board) |x, column| {
+            for (0.., column) |y, *cell| {
                 // Oops!
                 if (cell.is_mine and !cell.is_covered) {
                     game.is_ended = true;
-                    game.children_array[game.children_array_index] = .{ @intCast(u16, x), @intCast(u16, y) };
+                    game.children_array[game.children_array_index] = .{ @intCast(x), @intCast(y) };
                     game.children_array_index += 1;
                 }
 
@@ -242,8 +242,8 @@ fn check_win_conditions(game: *GameState) void {
 }
 
 fn is_neighbor(a: u32_2, b: u32_2) !bool {
-    const dx = try std.math.absInt(@intCast(i32, a[0]) - @intCast(i32, b[0]));
-    const dy = try std.math.absInt(@intCast(i32, a[1]) - @intCast(i32, b[1]));
+    const dx = @abs(@as(i32, @intCast(a[0])) - @as(i32, @intCast(b[0])));
+    const dy = @abs(@as(i32, @intCast(a[1])) - @as(i32, @intCast(b[1])));
     return dx <= 1 and dy <= 1;
 }
 
@@ -272,13 +272,13 @@ fn fill_mines(game: *GameState, start: u16_2) void {
 
         // Increment the counts for neighboring cells
         for (neighborhood_offset_table[0..9]) |offset| {
-            const target = @intCast(i16_2, random_pos) + offset;
+            const target = @as(i16_2, @intCast(random_pos)) + offset;
 
             // Out of bounds
-            if (any(target < i16_2{ 0, 0 }) or any(target >= game.extent))
+            if (any(target < i16_2{ 0, 0 }) or any(@as(u32_2, @intCast(target)) >= game.extent))
                 continue;
 
-            cell_at(game, @intCast(u16_2, target)).mine_neighbors += 1;
+            cell_at(game, @as(u16_2, @intCast(target))).mine_neighbors += 1;
         }
 
         remaining_mines -= 1;
@@ -302,13 +302,13 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     game.children_array_index += 1;
 
     for (neighborhood_offset_table[0..8]) |offset| {
-        const target = @intCast(i16_2, uncover_pos) + offset;
+        const target = @as(i16_2, @intCast(uncover_pos)) + offset;
 
         // Out of bounds
-        if (any(target < i16_2{ 0, 0 }) or any(target >= game.extent))
+        if (any(target < i16_2{ 0, 0 }) or any(@as(u32_2, @intCast(target)) >= game.extent))
             continue;
 
-        const utarget = @intCast(u16_2, target);
+        const utarget = @as(u16_2, @intCast(target));
 
         var target_cell = cell_at(game, utarget);
 
@@ -339,14 +339,14 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
     var flag_count: u32 = 0;
 
     for (neighborhood_offset_table[0..8]) |offset| {
-        const target = @intCast(i16_2, number_pos) + offset;
+        const target = @as(i16_2, @intCast(number_pos)) + offset;
 
         // Out of bounds
-        if (any(target < i16_2{ 0, 0 }) or any(target >= game.extent))
+        if (any(target < i16_2{ 0, 0 }) or any(@as(u32_2, @intCast(target)) >= game.extent))
             continue;
 
-        const utarget = @intCast(u16_2, target);
-        var target_cell = cell_at(game, utarget);
+        const utarget = @as(u16_2, @intCast(target));
+        const target_cell = cell_at(game, utarget);
 
         assert(target_cell.is_covered or target_cell.marking == Marking.None);
 
