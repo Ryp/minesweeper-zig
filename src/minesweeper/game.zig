@@ -44,7 +44,7 @@ pub const GameState = struct {
     extent: u32_2,
     mine_count: u32,
     board: [][]CellState,
-    rng: std.rand.Xoroshiro128, // Hardcode PRNG type for forward compatibility
+    rng: std.Random.Xoroshiro128, // Hardcode PRNG type for forward compatibility
     is_first_move: bool = true,
     is_ended: bool = false,
     flag_count: u32 = 0,
@@ -63,16 +63,16 @@ pub fn cell_at(game: *GameState, position: u32_2) *CellState {
 // I borrowed this name from HLSL
 fn all(vector: anytype) bool {
     const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.Vector.child == bool);
-    assert(type_info.Vector.len > 1);
+    assert(type_info.vector.child == bool);
+    assert(type_info.vector.len > 1);
 
     return @reduce(.And, vector);
 }
 
 fn any(vector: anytype) bool {
     const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.Vector.child == bool);
-    assert(type_info.Vector.len > 1);
+    assert(type_info.vector.child == bool);
+    assert(type_info.vector.len > 1);
 
     return @reduce(.Or, vector);
 }
@@ -113,7 +113,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, mine_count
     return GameState{
         .extent = extent,
         .mine_count = mine_count,
-        .rng = std.rand.Xoroshiro128.init(seed),
+        .rng = std.Random.Xoroshiro128.init(seed),
         .board = board,
         .event_history = event_history,
         .children_array = children_array,
