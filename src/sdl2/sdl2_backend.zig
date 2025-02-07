@@ -8,7 +8,6 @@ const c = @cImport({
 const game = @import("../minesweeper/game.zig");
 const GameState = game.GameState;
 const event = @import("../minesweeper/event.zig");
-const GameEventTag = event.GameEventTag;
 
 const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 38;
@@ -178,12 +177,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         // Process game events for the gfx side
         for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
             switch (game_event) {
-                GameEventTag.discover_number => |e| {
+                .discover_number => |e| {
                     if (e.children.len == 0) {
                         gfx_board[e.location[0]][e.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
-                GameEventTag.game_end => |e| {
+                .game_end => |e| {
                     for (e.exploded_mines) |mine_location| {
                         gfx_board[mine_location[0]][mine_location[1]].is_exploded = true;
                     }

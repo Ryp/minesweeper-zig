@@ -157,7 +157,12 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
             const end_children = game.children_array_index;
 
-            event.append_discover_number_event(game, uncover_pos, game.children_array[start_children..end_children]);
+            event.allocate_new_event(game).* = .{
+                .discover_number = .{
+                    .location = uncover_pos,
+                    .children = game.children_array[start_children..end_children],
+                },
+            };
         } else {
             return; // Nothing happens!
         }
@@ -169,10 +174,19 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
         const end_children = game.children_array_index;
 
-        event.append_discover_many_event(game, uncover_pos, game.children_array[start_children..end_children]);
+        event.allocate_new_event(game).* = .{
+            .discover_many = .{
+                .location = uncover_pos,
+                .children = game.children_array[start_children..end_children],
+            },
+        };
     } else {
         uncovered_cell.is_covered = false;
-        event.append_discover_single_event(game, uncover_pos);
+        event.allocate_new_event(game).* = .{
+            .discover_single = .{
+                .location = uncover_pos,
+            },
+        };
     }
 
     check_win_conditions(game);
@@ -218,7 +232,12 @@ fn check_win_conditions(game: *GameState) void {
                 }
             }
 
-            event.append_game_end_event(game, GameResult.Lose, game.children_array[start_children..end_children]);
+            event.allocate_new_event(game).* = .{
+                .game_end = .{
+                    .result = GameResult.Lose,
+                    .exploded_mines = game.children_array[start_children..end_children],
+                },
+            };
         }
     }
 
@@ -237,7 +256,13 @@ fn check_win_conditions(game: *GameState) void {
         }
 
         game.is_ended = true;
-        event.append_game_end_event(game, GameResult.Win, game.children_array[0..0]);
+
+        event.allocate_new_event(game).* = .{
+            .game_end = .{
+                .result = GameResult.Win,
+                .exploded_mines = game.children_array[0..0],
+            },
+        };
     }
 }
 
