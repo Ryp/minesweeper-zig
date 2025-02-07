@@ -138,6 +138,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
             }
         }
 
+        // Get current state of Control key
+        const is_ctrl_pressed = c.SDL_GetModState() & c.KMOD_CTRL != 0;
+
         const string = try std.fmt.allocPrintZ(allocator, "Minesweeper {d}x{d} with {d}/{d} mines", .{ game_state.extent[0], game_state.extent[1], game_state.flag_count, game_state.mine_count });
         defer allocator.free(string);
 
@@ -191,12 +194,25 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
                 .h = SpriteScreenExtent,
             };
 
+            const is_cheating = is_ctrl_pressed;
+
             // Draw base cell sprite
             {
-                const sprite_sheet_pos = get_tile_index(cell, gfx_cell, game_state.is_ended);
+                var modified_cell = cell;
+                modified_cell.is_covered = if (is_cheating) false else cell.is_covered;
+
+                const sprite_sheet_pos = get_tile_index(modified_cell, gfx_cell, game_state.is_ended);
                 const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
 
                 _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+            }
+
+            if (is_cheating and cell.is_covered) {
+                const sprite_sheet_rect = get_sprite_sheet_rect(.{ 0, 1 });
+
+                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @intFromFloat(128.0));
+                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
             }
 
             // Draw overlay on invalid move
