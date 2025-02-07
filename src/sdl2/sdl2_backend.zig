@@ -197,34 +197,33 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         // Render game
         _ = c.SDL_RenderClear(ren);
 
-        for (0.., game_state.board) |i, column| {
-            for (0.., column) |j, cell| {
-                const gfx_cell = gfx_board[i][j];
+        for (game_state.board, 0..) |cell, flat_index| {
+            const coords = game.cell_flat_index_to_coords(game_state.extent, @intCast(flat_index));
+            const gfx_cell = gfx_board[coords[0]][coords[1]];
 
-                const sprite_output_pos_rect = c.SDL_Rect{
-                    .x = @intCast(i * SpriteScreenExtent),
-                    .y = @intCast(j * SpriteScreenExtent),
-                    .w = SpriteScreenExtent,
-                    .h = SpriteScreenExtent,
-                };
+            const sprite_output_pos_rect = c.SDL_Rect{
+                .x = @intCast(coords[0] * SpriteScreenExtent),
+                .y = @intCast(coords[1] * SpriteScreenExtent),
+                .w = SpriteScreenExtent,
+                .h = SpriteScreenExtent,
+            };
 
-                // Draw base cell sprite
-                {
-                    const sprite_sheet_pos = get_tile_index(cell, gfx_cell, game_state.is_ended);
-                    const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
+            // Draw base cell sprite
+            {
+                const sprite_sheet_pos = get_tile_index(cell, gfx_cell, game_state.is_ended);
+                const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
 
-                    _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
-                }
+                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+            }
 
-                // Draw overlay on invalid move
-                if (gfx_cell.invalid_move_time_secs > 0.0) {
-                    const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
-                    const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
+            // Draw overlay on invalid move
+            if (gfx_cell.invalid_move_time_secs > 0.0) {
+                const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
+                const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
 
-                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @intFromFloat(alpha * 255.0));
-                    _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
-                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
-                }
+                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @intFromFloat(alpha * 255.0));
+                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
             }
         }
 

@@ -10,21 +10,21 @@ pub const u16_2 = @Vector(2, u16);
 pub const i16_2 = @Vector(2, i16);
 pub const u32_2 = @Vector(2, u32);
 
-const MineSweeperBoardExtentMin = u32_2{ 5, 5 };
-const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
+const BoardExtentMin = u32_2{ 5, 5 };
+const BoardExtentMax = u32_2{ 1024, 1024 };
 const UncoverAllMinesAfterLosing = true;
 const EnableGuessFlag = true;
 
 const NeighborhoodOffsetTableWithCenter = [9]i16_2{
-    i16_2{ -1, -1 },
-    i16_2{ -1, 0 },
-    i16_2{ -1, 1 },
-    i16_2{ 0, -1 },
-    i16_2{ 0, 1 },
-    i16_2{ 1, -1 },
-    i16_2{ 1, 0 },
-    i16_2{ 1, 1 },
-    i16_2{ 0, 0 }, // Center position at the end so we can easily ignore it
+    .{ -1, -1 },
+    .{ -1, 0 },
+    .{ -1, 1 },
+    .{ 0, -1 },
+    .{ 0, 1 },
+    .{ 1, -1 },
+    .{ 1, 0 },
+    .{ 1, 1 },
+    .{ 0, 0 }, // Center position at the end so we can easily ignore it
 };
 
 const NeighborhoodOffsetTable = NeighborhoodOffsetTableWithCenter[0..8];
@@ -45,7 +45,7 @@ pub const CellState = struct {
 pub const GameState = struct {
     extent: u32_2,
     mine_count: u32,
-    board: [][]CellState,
+    board: []CellState,
     rng: std.Random.Xoroshiro128, // Hardcode PRNG type for forward compatibility
     is_first_move: bool = true,
     is_ended: bool = false,
@@ -58,8 +58,20 @@ pub const GameState = struct {
     children_array_index: usize = 0,
 };
 
+pub fn cell_coords_to_flat_index(extent: u32_2, cell_coords: u32_2) u32 {
+    return cell_coords[0] + extent[0] * cell_coords[1];
+}
+
+pub fn cell_flat_index_to_coords(extent: u32_2, flat_index: u32) u16_2 {
+    return .{
+        @intCast(flat_index % extent[0]),
+        @intCast(flat_index / extent[0]),
+    };
+}
+
 pub fn cell_at(game: *GameState, position: u32_2) *CellState {
-    return &game.board[position[0]][position[1]];
+    const index_flat = cell_coords_to_flat_index(game.extent, position);
+    return &game.board[index_flat];
 }
 
 // I borrowed this name from HLSL
@@ -82,24 +94,19 @@ fn any(vector: anytype) bool {
 // Creates blank board without mines.
 // Placement of mines is done on the first player input.
 pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, mine_count: u32, seed: u64) !GameState {
-    assert(all(extent >= MineSweeperBoardExtentMin));
-    assert(all(extent <= MineSweeperBoardExtentMax));
+    assert(all(extent >= BoardExtentMin));
+    assert(all(extent <= BoardExtentMax));
 
     const cell_count = extent[0] * extent[1];
     assert(mine_count > 0);
     assert(mine_count <= (cell_count - 9) / 2); // 9 is to take into account the starting position that has no mines in the neighborhood
 
     // Allocate board
-    const board = try allocator.alloc([]CellState, extent[0]);
+    const board = try allocator.alloc(CellState, extent[0] * extent[1]);
     errdefer allocator.free(board);
 
-    for (board) |*column| {
-        column.* = try allocator.alloc(CellState, extent[1]);
-        errdefer allocator.free(column);
-
-        for (column.*) |*cell| {
-            cell.* = .{};
-        }
+    for (board) |*cell| {
+        cell.* = .{};
     }
 
     // Allocate array to hold events
@@ -125,11 +132,6 @@ pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, mine_count
 pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.children_array);
     allocator.free(game.event_history);
-
-    for (game.board) |column| {
-        allocator.free(column);
-    }
-
     allocator.free(game.board);
 }
 
@@ -206,18 +208,16 @@ fn check_win_conditions(game: *GameState) void {
         const start_children = game.children_array_index;
 
         game.flag_count = 0;
-        for (0.., game.board) |x, column| {
-            for (0.., column) |y, *cell| {
-                // Oops!
-                if (cell.is_mine and !cell.is_covered) {
-                    game.is_ended = true;
-                    game.children_array[game.children_array_index] = .{ @intCast(x), @intCast(y) };
-                    game.children_array_index += 1;
-                }
-
-                if (cell.marking == .Flag)
-                    game.flag_count += 1;
+        for (game.board, 0..) |*cell, flat_index| {
+            // Oops!
+            if (cell.is_mine and !cell.is_covered) {
+                game.is_ended = true;
+                game.children_array[game.children_array_index] = cell_flat_index_to_coords(game.extent, @intCast(flat_index));
+                game.children_array_index += 1;
             }
+
+            if (cell.marking == .Flag)
+                game.flag_count += 1;
         }
 
         const end_children = game.children_array_index;
@@ -226,11 +226,9 @@ fn check_win_conditions(game: *GameState) void {
             assert(end_children > start_children);
 
             if (UncoverAllMinesAfterLosing) {
-                for (game.board) |column| {
-                    for (column) |*cell| {
-                        if (cell.is_mine)
-                            cell.is_covered = false;
-                    }
+                for (game.board) |*cell| {
+                    if (cell.is_mine)
+                        cell.is_covered = false;
                 }
             }
 
@@ -246,14 +244,12 @@ fn check_win_conditions(game: *GameState) void {
     // Did we win?
     if (is_board_won(game.board)) {
         // Uncover the board and flag all mines
-        for (game.board) |column| {
-            for (column) |*cell| {
-                if (cell.is_mine) {
-                    // Here we should update the flag count but since we won there's no need
-                    cell.marking = .Flag;
-                } else {
-                    cell.is_covered = false;
-                }
+        for (game.board) |*cell| {
+            if (cell.is_mine) {
+                // Here we should update the flag count but since we won there's no need
+                cell.marking = .Flag;
+            } else {
+                cell.is_covered = false;
             }
         }
 
@@ -436,12 +432,10 @@ pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
     }
 }
 
-fn is_board_won(board: [][]CellState) bool {
-    for (board) |column| {
-        for (column) |cell| {
-            if (cell.is_covered and !cell.is_mine)
-                return false;
-        }
+fn is_board_won(board: []CellState) bool {
+    for (board) |cell| {
+        if (cell.is_covered and !cell.is_mine)
+            return false;
     }
 
     return true;
