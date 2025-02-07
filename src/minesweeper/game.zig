@@ -15,7 +15,7 @@ const MineSweeperBoardExtentMax = u32_2{ 1024, 1024 };
 const UncoverAllMinesAfterLosing = true;
 const EnableGuessFlag = true;
 
-const neighborhood_offset_table = [9]i16_2{
+const NeighborhoodOffsetTableWithCenter = [9]i16_2{
     i16_2{ -1, -1 },
     i16_2{ -1, 0 },
     i16_2{ -1, 1 },
@@ -26,6 +26,8 @@ const neighborhood_offset_table = [9]i16_2{
     i16_2{ 1, 1 },
     i16_2{ 0, 0 }, // Center position at the end so we can easily ignore it
 };
+
+const NeighborhoodOffsetTable = NeighborhoodOffsetTableWithCenter[0..8];
 
 pub const Marking = enum {
     None,
@@ -296,7 +298,7 @@ fn fill_mines(game: *GameState, start: u16_2) void {
         random_cell.is_mine = true;
 
         // Increment the counts for neighboring cells
-        for (neighborhood_offset_table[0..9]) |offset| {
+        for (NeighborhoodOffsetTableWithCenter) |offset| {
             const target = @as(i16_2, @intCast(random_pos)) + offset;
 
             // Out of bounds
@@ -326,7 +328,7 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     game.children_array[game.children_array_index] = uncover_pos;
     game.children_array_index += 1;
 
-    for (neighborhood_offset_table[0..8]) |offset| {
+    for (NeighborhoodOffsetTable) |offset| {
         const target = @as(i16_2, @intCast(uncover_pos)) + offset;
 
         // Out of bounds
@@ -363,7 +365,7 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
     var candidate_count: u32 = 0;
     var flag_count: u32 = 0;
 
-    for (neighborhood_offset_table[0..8]) |offset| {
+    for (NeighborhoodOffsetTable) |offset| {
         const target = @as(i16_2, @intCast(number_pos)) + offset;
 
         // Out of bounds
