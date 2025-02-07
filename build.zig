@@ -9,20 +9,18 @@ pub fn build(b: *std.Build) void {
 
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const mode = b.standardOptimizeOption(.{});
+    const optimize_mode = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-	.name = "minesweeper", 
-	.root_source_file = b.path("src/main.zig"),
-	.target = target,
-	.optimize = mode
+        .name = "minesweeper",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize_mode,
     });
-    //exe.setTarget(target);
-    //exe.setBuildMode(mode);
-    //exe.install();
+
     exe.linkLibC();
     exe.linkSystemLibrary("SDL2");
-    
+
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -37,7 +35,7 @@ pub fn build(b: *std.Build) void {
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/minesweeper/test.zig"),
         .target = target,
-        .optimize = mode,
+        .optimize = optimize_mode,
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
