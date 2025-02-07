@@ -55,30 +55,6 @@ fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
     };
 }
 
-fn allocate_2d_array_default_init(comptime T: type, allocator: std.mem.Allocator, x: usize, y: usize) ![][]T {
-    const array = try allocator.alloc([]T, x);
-    errdefer allocator.free(array);
-
-    for (array) |*column| {
-        column.* = try allocator.alloc(T, y);
-        errdefer allocator.free(column);
-
-        for (column.*) |*cell| {
-            cell.* = .{};
-        }
-    }
-
-    return array;
-}
-
-fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: [][]T) void {
-    for (array) |column| {
-        allocator.free(column);
-    }
-
-    allocator.free(array);
-}
-
 pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
     const width = game_state.extent[0] * SpriteScreenExtent;
     const height = game_state.extent[1] * SpriteScreenExtent;
@@ -123,7 +99,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
     var shouldExit = false;
 
-    var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent[0], game_state.extent[1]);
+    const gfx_board = try allocator.alloc(GfxState, game_state.extent[0] * game_state.extent[1]);
+    errdefer allocator.free(gfx_board);
+
+    for (gfx_board) |*cell| {
+        cell.* = .{};
+    }
+
     var gfx_event_index: usize = 0;
     var last_frame_time_ms: u32 = c.SDL_GetTicks();
 
@@ -143,12 +125,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         shouldExit = true;
                 },
                 c.SDL_MOUSEBUTTONUP => {
-                    const x = @as(u16, @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent)));
-                    const y = @as(u16, @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent)));
+                    const x = @as(u32, @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent)));
+                    const y = @as(u32, @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent)));
+                    const mouse_cell_index = game.cell_coords_to_flat_index(game_state.extent, .{ x, y });
+
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        game.uncover(game_state, .{ x, y });
+                        game.uncover(game_state, mouse_cell_index);
                     } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {
-                        game.toggle_flag(game_state, .{ x, y });
+                        game.toggle_flag(game_state, mouse_cell_index);
                     }
                 },
                 else => {},
@@ -163,28 +147,29 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
         _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hovered_cell_x = @as(u16, @intCast(@max(0, @min(game_state.extent[0], @as(u16, @intCast(@divTrunc(mouse_x, SpriteScreenExtent)))))));
-        const hovered_cell_y = @as(u16, @intCast(@max(0, @min(game_state.extent[1], @as(u16, @intCast(@divTrunc(mouse_y, SpriteScreenExtent)))))));
 
-        for (gfx_board) |column| {
-            for (column) |*cell| {
-                cell.is_hovered = false;
-                cell.invalid_move_time_secs = @max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
-            }
+        const hovered_cell_x = @max(0, @min(game_state.extent[0], @as(u32, @intCast(@divTrunc(mouse_x, SpriteScreenExtent)))));
+        const hovered_cell_y = @max(0, @min(game_state.extent[1], @as(u32, @intCast(@divTrunc(mouse_y, SpriteScreenExtent)))));
+        const hovered_cell_index = game.cell_coords_to_flat_index(game_state.extent, .{ hovered_cell_x, hovered_cell_y });
+
+        for (gfx_board) |*cell| {
+            cell.is_hovered = false;
+            cell.invalid_move_time_secs = @max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
         }
-        gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
+
+        gfx_board[hovered_cell_index].is_hovered = true;
 
         // Process game events for the gfx side
         for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
             switch (game_event) {
                 .discover_number => |e| {
                     if (e.children.len == 0) {
-                        gfx_board[e.location[0]][e.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
+                        gfx_board[e.location].invalid_move_time_secs = InvalidMoveTimeSecs;
                     }
                 },
                 .game_end => |e| {
                     for (e.exploded_mines) |mine_location| {
-                        gfx_board[mine_location[0]][mine_location[1]].is_exploded = true;
+                        gfx_board[mine_location].is_exploded = true;
                     }
                 },
                 else => {},
@@ -198,12 +183,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board, 0..) |cell, flat_index| {
-            const coords = game.cell_flat_index_to_coords(game_state.extent, @intCast(flat_index));
-            const gfx_cell = gfx_board[coords[0]][coords[1]];
+            const gfx_cell = gfx_board[flat_index];
+            const cell_coords = game.cell_flat_index_to_coords(game_state.extent, @intCast(flat_index));
 
             const sprite_output_pos_rect = c.SDL_Rect{
-                .x = @intCast(coords[0] * SpriteScreenExtent),
-                .y = @intCast(coords[1] * SpriteScreenExtent),
+                .x = @intCast(cell_coords[0] * SpriteScreenExtent),
+                .y = @intCast(cell_coords[1] * SpriteScreenExtent),
                 .w = SpriteScreenExtent,
                 .h = SpriteScreenExtent,
             };
@@ -233,5 +218,5 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         last_frame_time_ms = current_frame_time_ms;
     }
 
-    deallocate_2d_array(GfxState, allocator, gfx_board);
+    allocator.free(gfx_board);
 }

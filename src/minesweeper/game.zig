@@ -5,17 +5,15 @@ const event = @import("event.zig");
 const GameEvent = event.GameEvent;
 const GameResult = event.GameResult;
 
-// FIXME Check https://github.com/ziglang/zig/issues/10421
-pub const u16_2 = @Vector(2, u16);
-pub const i16_2 = @Vector(2, i16);
 pub const u32_2 = @Vector(2, u32);
+pub const i32_2 = @Vector(2, i32);
 
 const BoardExtentMin = u32_2{ 5, 5 };
 const BoardExtentMax = u32_2{ 1024, 1024 };
 const UncoverAllMinesAfterLosing = true;
 const EnableGuessFlag = true;
 
-const NeighborhoodOffsetTableWithCenter = [9]i16_2{
+const NeighborhoodOffsetTableWithCenter = [9]i32_2{
     .{ -1, -1 },
     .{ -1, 0 },
     .{ -1, 1 },
@@ -54,7 +52,7 @@ pub const GameState = struct {
     // Storage for game events
     event_history: []GameEvent,
     event_history_index: usize = 0,
-    children_array: []u16_2,
+    children_array: []u32,
     children_array_index: usize = 0,
 };
 
@@ -62,16 +60,15 @@ pub fn cell_coords_to_flat_index(extent: u32_2, cell_coords: u32_2) u32 {
     return cell_coords[0] + extent[0] * cell_coords[1];
 }
 
-pub fn cell_flat_index_to_coords(extent: u32_2, flat_index: u32) u16_2 {
+pub fn cell_flat_index_to_coords(extent: u32_2, flat_index: u32) u32_2 {
     return .{
         @intCast(flat_index % extent[0]),
         @intCast(flat_index / extent[0]),
     };
 }
 
-pub fn cell_at(game: *GameState, position: u32_2) *CellState {
-    const index_flat = cell_coords_to_flat_index(game.extent, position);
-    return &game.board[index_flat];
+fn is_coords_valid(extent: u32_2, coords: i32_2) bool {
+    return all(coords >= i32_2{ 0, 0 }) and all(@as(u32_2, @intCast(coords)) < extent);
 }
 
 // I borrowed this name from HLSL
@@ -81,14 +78,6 @@ fn all(vector: anytype) bool {
     assert(type_info.vector.len > 1);
 
     return @reduce(.And, vector);
-}
-
-fn any(vector: anytype) bool {
-    const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.vector.child == bool);
-    assert(type_info.vector.len > 1);
-
-    return @reduce(.Or, vector);
 }
 
 // Creates blank board without mines.
@@ -116,7 +105,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, mine_count
     errdefer allocator.free(event_history);
 
     // Allocate array to hold cells discovered in events
-    const children_array = try allocator.alloc(u16_2, cell_count);
+    const children_array = try allocator.alloc(u32, cell_count);
     errdefer allocator.free(children_array);
 
     return GameState{
@@ -136,18 +125,18 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
 }
 
 // Process an oncover events and propagates the state on the board.
-pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
-    assert(all(uncover_pos < game.extent));
+pub fn uncover(game: *GameState, uncover_index: u32) void {
+    assert(uncover_index < game.board.len);
 
     if (game.is_first_move) {
-        fill_mines(game, uncover_pos);
+        fill_mines(game, uncover_index);
         game.is_first_move = false;
     }
 
     if (game.is_ended)
         return;
 
-    var uncovered_cell = cell_at(game, uncover_pos);
+    const uncovered_cell = &game.board[uncover_index];
 
     if (uncovered_cell.marking == .Flag) {
         return; // Nothing happens!
@@ -157,13 +146,13 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         if (!uncovered_cell.is_mine and uncovered_cell.mine_neighbors > 0) {
             const start_children = game.children_array_index;
 
-            uncover_from_number(game, uncover_pos, uncovered_cell);
+            uncover_from_number(game, uncover_index, uncovered_cell);
 
             const end_children = game.children_array_index;
 
             event.allocate_new_event(game).* = .{
                 .discover_number = .{
-                    .location = uncover_pos,
+                    .location = uncover_index,
                     .children = game.children_array[start_children..end_children],
                 },
             };
@@ -174,13 +163,13 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         // Create new event
         const start_children = game.children_array_index;
 
-        uncover_zero_neighbors(game, uncover_pos);
+        uncover_zero_neighbors(game, uncover_index);
 
         const end_children = game.children_array_index;
 
         event.allocate_new_event(game).* = .{
             .discover_many = .{
-                .location = uncover_pos,
+                .location = uncover_index,
                 .children = game.children_array[start_children..end_children],
             },
         };
@@ -188,7 +177,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
         uncovered_cell.is_covered = false;
         event.allocate_new_event(game).* = .{
             .discover_single = .{
-                .location = uncover_pos,
+                .location = uncover_index,
             },
         };
     }
@@ -212,7 +201,7 @@ fn check_win_conditions(game: *GameState) void {
             // Oops!
             if (cell.is_mine and !cell.is_covered) {
                 game.is_ended = true;
-                game.children_array[game.children_array_index] = cell_flat_index_to_coords(game.extent, @intCast(flat_index));
+                game.children_array[game.children_array_index] = @intCast(flat_index);
                 game.children_array_index += 1;
             }
 
@@ -275,33 +264,35 @@ fn is_neighbor(a: u32_2, b: u32_2) !bool {
 // We make sure that no mines is placed in the startup location, including its immediate neighborhood.
 // Often players restart the game until they land on this type of spots anyway, that removes the
 // frustrating guessing part.
-fn fill_mines(game: *GameState, start: u16_2) void {
+fn fill_mines(game: *GameState, start_index: u32) void {
+    const start = cell_flat_index_to_coords(game.extent, start_index);
+
     var remaining_mines = game.mine_count;
 
     // Randomly place the mines on the board
     while (remaining_mines > 0) {
-        const random_pos = u32_2{ game.rng.random().uintLessThan(u32, game.extent[0]), game.rng.random().uintLessThan(u32, game.extent[1]) };
+        const random_pos_index = game.rng.random().uintLessThan(u32, @intCast(game.board.len));
+        const random_pos = cell_flat_index_to_coords(game.extent, random_pos_index);
 
         // Do not generate mines where the player starts
         if (is_neighbor(random_pos, start) catch false)
             continue;
 
-        var random_cell = cell_at(game, random_pos);
+        const random_cell = &game.board[random_pos_index];
 
         if (random_cell.is_mine)
             continue;
 
         random_cell.is_mine = true;
 
-        // Increment the counts for neighboring cells
-        for (NeighborhoodOffsetTableWithCenter) |offset| {
-            const target = @as(i16_2, @intCast(random_pos)) + offset;
+        for (NeighborhoodOffsetTableWithCenter) |neighbor_offset| {
+            const neighbor_coords = @as(i32_2, @intCast(random_pos)) + neighbor_offset;
 
-            // Out of bounds
-            if (any(target < i16_2{ 0, 0 }) or any(@as(u32_2, @intCast(target)) >= game.extent))
-                continue;
+            if (is_coords_valid(game.extent, neighbor_coords)) {
+                const index_flat = cell_coords_to_flat_index(game.extent, @intCast(neighbor_coords));
 
-            cell_at(game, @as(u16_2, @intCast(target))).mine_neighbors += 1;
+                game.board[index_flat].mine_neighbors += 1;
+            }
         }
 
         remaining_mines -= 1;
@@ -311,8 +302,8 @@ fn fill_mines(game: *GameState, start: u16_2) void {
 // Discovers all cells adjacents to a zero-neighbor cell.
 // Assumes that the play is valid.
 // Careful, this function is recursive! It WILL smash the stack on large boards
-fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
-    var cell = cell_at(game, uncover_pos);
+fn uncover_zero_neighbors(game: *GameState, uncover_cell_index: u32) void {
+    const cell = &game.board[uncover_cell_index];
 
     assert(cell.mine_neighbors == 0);
 
@@ -321,30 +312,29 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
     cell.marking = .None;
     cell.is_covered = false;
 
-    game.children_array[game.children_array_index] = uncover_pos;
+    game.children_array[game.children_array_index] = uncover_cell_index;
     game.children_array_index += 1;
 
-    for (NeighborhoodOffsetTable) |offset| {
-        const target = @as(i16_2, @intCast(uncover_pos)) + offset;
+    const uncover_coords: i32_2 = @intCast(cell_flat_index_to_coords(game.extent, uncover_cell_index));
 
-        // Out of bounds
-        if (any(target < i16_2{ 0, 0 }) or any(@as(u32_2, @intCast(target)) >= game.extent))
-            continue;
+    for (NeighborhoodOffsetTable) |neighbor_offset| {
+        const neighbor_coords = uncover_coords + neighbor_offset;
 
-        const utarget = @as(u16_2, @intCast(target));
+        if (is_coords_valid(game.extent, neighbor_coords)) {
+            const target_index = cell_coords_to_flat_index(game.extent, @intCast(neighbor_coords));
+            const target_cell = &game.board[target_index];
 
-        var target_cell = cell_at(game, utarget);
+            if (!target_cell.is_covered)
+                continue;
 
-        if (!target_cell.is_covered)
-            continue;
+            if (target_cell.mine_neighbors > 0) {
+                target_cell.is_covered = false;
 
-        if (target_cell.mine_neighbors > 0) {
-            target_cell.is_covered = false;
-
-            game.children_array[game.children_array_index] = utarget;
-            game.children_array_index += 1;
-        } else {
-            uncover_zero_neighbors(game, utarget);
+                game.children_array[game.children_array_index] = target_index;
+                game.children_array_index += 1;
+            } else {
+                uncover_zero_neighbors(game, target_index);
+            }
         }
     }
 }
@@ -352,65 +342,65 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
 // Discovers all adjacent cells around a numbered cell,
 // if the number of flags around it equals that number.
 // This can make you lose if your flags aren't set properly.
-fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellState) void {
+fn uncover_from_number(game: *GameState, uncover_cell_index: u32, number_cell: *CellState) void {
     assert(number_cell.mine_neighbors > 0);
     assert(!number_cell.is_covered);
     assert(!number_cell.is_mine);
 
-    var candidates: [8]u16_2 = undefined;
+    var candidates: [8]u32 = undefined;
     var candidate_count: u32 = 0;
     var flag_count: u32 = 0;
 
+    const uncover_coords: i32_2 = @intCast(cell_flat_index_to_coords(game.extent, uncover_cell_index));
+
     // Count covered cells
-    for (NeighborhoodOffsetTable) |offset| {
-        const target = @as(i16_2, @intCast(number_pos)) + offset;
+    for (NeighborhoodOffsetTable) |neighbor_offset| {
+        const neighbor_coords = uncover_coords + neighbor_offset;
 
-        // Out of bounds
-        if (any(target < i16_2{ 0, 0 }) or any(@as(u32_2, @intCast(target)) >= game.extent))
-            continue;
+        if (is_coords_valid(game.extent, neighbor_coords)) {
+            const target_index = cell_coords_to_flat_index(game.extent, @intCast(neighbor_coords));
+            const target_cell = game.board[target_index];
 
-        const utarget = @as(u16_2, @intCast(target));
-        const target_cell = cell_at(game, utarget);
+            // Only count covered cells
+            if (!target_cell.is_covered) {
+                continue;
+            }
 
-        // Only count covered cells
-        if (!target_cell.is_covered) {
-            continue;
-        }
-
-        if (target_cell.marking == .Flag) {
-            flag_count += 1;
-        } else if (target_cell.is_covered) {
-            candidates[candidate_count] = utarget;
-            candidate_count += 1;
+            if (target_cell.marking == .Flag) {
+                flag_count += 1;
+            } else if (target_cell.is_covered) {
+                candidates[candidate_count] = target_index;
+                candidate_count += 1;
+            }
         }
     }
 
     if (number_cell.mine_neighbors == flag_count) {
-        for (candidates[0..candidate_count]) |candidate_pos| {
-            var cell = cell_at(game, candidate_pos);
+        for (candidates[0..candidate_count]) |candidate_index| {
+            const cell = &game.board[candidate_index];
 
             assert(cell.marking != .Flag);
 
             // We might trigger second-hand big uncovers!
             if (cell.mine_neighbors == 0) {
-                uncover_zero_neighbors(game, candidate_pos);
+                uncover_zero_neighbors(game, candidate_index);
             } else {
                 cell.is_covered = false;
             }
 
-            game.children_array[game.children_array_index] = candidate_pos;
+            game.children_array[game.children_array_index] = candidate_index;
             game.children_array_index += 1;
         }
     }
 }
 
-pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
-    assert(all(flag_pos < game.extent));
+pub fn toggle_flag(game: *GameState, cell_index: u32) void {
+    assert(cell_index < game.board.len);
 
     if (game.is_first_move or game.is_ended)
         return;
 
-    var cell = cell_at(game, flag_pos);
+    const cell = &game.board[cell_index];
 
     if (!cell.is_covered)
         return;

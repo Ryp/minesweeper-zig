@@ -1,18 +1,17 @@
 const GameState = @import("game.zig").GameState;
-const u16_2 = @import("game.zig").u16_2;
 
 pub const DiscoverSingleEvent = struct {
-    location: u16_2,
+    location: u32,
 };
 
 pub const DiscoverManyEvent = struct {
-    location: u16_2,
-    children: []u16_2,
+    location: u32,
+    children: []u32,
 };
 
 pub const DiscoverNumberEvent = struct {
-    location: u16_2,
-    children: []u16_2,
+    location: u32,
+    children: []u32,
 };
 
 pub const GameResult = enum {
@@ -22,7 +21,7 @@ pub const GameResult = enum {
 
 pub const GameEndEvent = struct {
     result: GameResult,
-    exploded_mines: []u16_2,
+    exploded_mines: []u32,
 };
 
 pub const GameEvent = union(enum) {
