@@ -6,12 +6,11 @@ const c = @cImport({
 });
 
 const game = @import("../minesweeper/game.zig");
-const GameState = game.GameState;
 const event = @import("../minesweeper/event.zig");
 
 const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 38;
-const InvalidMoveTimeSecs: f32 = 0.3;
+const InvalidMoveTimeSecs: f32 = 0.6;
 
 const GfxState = struct {
     invalid_move_time_secs: f32 = 0.0,
@@ -55,7 +54,7 @@ fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
     };
 }
 
-pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
+pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameState) !void {
     const width = game_state.extent[0] * SpriteScreenExtent;
     const height = game_state.extent[1] * SpriteScreenExtent;
 
@@ -179,7 +178,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         // Advance event index since we processed the rest
         gfx_event_index = game_state.event_history_index;
 
-        // Render game
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board, 0..) |cell, flat_index| {
@@ -212,7 +210,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             }
         }
 
-        // Present
         c.SDL_RenderPresent(ren);
 
         last_frame_time_ms = current_frame_time_ms;
