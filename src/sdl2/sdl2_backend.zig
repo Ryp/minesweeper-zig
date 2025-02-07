@@ -22,13 +22,13 @@ const GfxState = struct {
 fn get_tile_index(cell: game.CellState, gfx_cell: GfxState, is_game_ended: bool) [2]u8 {
     if (cell.is_covered) {
         var index_x: u8 = 0;
-        if (cell.marking == game.Marking.Flag) {
+        if (cell.marking == .Flag) {
             if (is_game_ended and !cell.is_mine) {
                 index_x = 8;
             } else {
                 index_x = 2;
             }
-        } else if (cell.marking == game.Marking.Guess) {
+        } else if (cell.marking == .Guess) {
             index_x = 4;
         }
 

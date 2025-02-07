@@ -38,7 +38,7 @@ pub const Marking = enum {
 pub const CellState = struct {
     is_mine: bool = false,
     is_covered: bool = true,
-    marking: Marking = Marking.None,
+    marking: Marking = .None,
     mine_neighbors: u4 = 0,
 };
 
@@ -147,7 +147,7 @@ pub fn uncover(game: *GameState, uncover_pos: u16_2) void {
 
     var uncovered_cell = cell_at(game, uncover_pos);
 
-    if (uncovered_cell.marking == Marking.Flag) {
+    if (uncovered_cell.marking == .Flag) {
         return; // Nothing happens!
     }
 
@@ -215,7 +215,7 @@ fn check_win_conditions(game: *GameState) void {
                     game.children_array_index += 1;
                 }
 
-                if (cell.marking == Marking.Flag)
+                if (cell.marking == .Flag)
                     game.flag_count += 1;
             }
         }
@@ -250,7 +250,7 @@ fn check_win_conditions(game: *GameState) void {
             for (column) |*cell| {
                 if (cell.is_mine) {
                     // Here we should update the flag count but since we won there's no need
-                    cell.marking = Marking.Flag;
+                    cell.marking = .Flag;
                 } else {
                     cell.is_covered = false;
                 }
@@ -322,7 +322,7 @@ fn uncover_zero_neighbors(game: *GameState, uncover_pos: u16_2) void {
 
     // If the user put an invalid flag there by mistake, we clear it for him
     // That can only happens in recursive calls.
-    cell.marking = Marking.None;
+    cell.marking = .None;
     cell.is_covered = false;
 
     game.children_array[game.children_array_index] = uncover_pos;
@@ -375,9 +375,9 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
         const utarget = @as(u16_2, @intCast(target));
         const target_cell = cell_at(game, utarget);
 
-        assert(target_cell.is_covered or target_cell.marking == Marking.None);
+        assert(target_cell.is_covered or target_cell.marking == .None);
 
-        if (target_cell.marking == Marking.Flag) {
+        if (target_cell.marking == .Flag) {
             flag_count += 1;
         } else if (target_cell.is_covered) {
             candidates[candidate_count] = utarget;
@@ -391,7 +391,7 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
             const candidate_pos = candidates[candidate_index];
             var cell = cell_at(game, candidate_pos);
 
-            assert(cell.marking != Marking.Flag);
+            assert(cell.marking != .Flag);
 
             // We might trigger second-hand big uncovers!
             if (cell.mine_neighbors == 0) {
@@ -420,18 +420,18 @@ pub fn toggle_flag(game: *GameState, flag_pos: u16_2) void {
         return;
 
     switch (cell.marking) {
-        Marking.None => {
-            cell.marking = Marking.Flag;
+        .None => {
+            cell.marking = .Flag;
             game.flag_count += 1;
         },
-        Marking.Flag => {
+        .Flag => {
             if (EnableGuessFlag) {
-                cell.marking = Marking.Guess;
-            } else cell.marking = Marking.None;
+                cell.marking = .Guess;
+            } else cell.marking = .None;
             game.flag_count -= 1;
         },
-        Marking.Guess => {
-            cell.marking = Marking.None;
+        .Guess => {
+            cell.marking = .None;
         },
     }
 }
