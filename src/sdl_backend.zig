@@ -2,11 +2,11 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const c = @cImport({
-    @cInclude("SDL2/SDL.h");
+    @cInclude("SDL3/SDL.h");
 });
 
-const game = @import("../minesweeper/game.zig");
-const event = @import("../minesweeper/event.zig");
+const game = @import("minesweeper/game.zig");
+const event = @import("minesweeper/event.zig");
 
 const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 38;
@@ -45,12 +45,12 @@ fn get_tile_index(cell: game.CellState, gfx_cell: GfxState, is_game_ended: bool)
     }
 }
 
-fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
-    return c.SDL_Rect{
-        .x = position[0] * SpriteSheetTileExtent,
-        .y = position[1] * SpriteSheetTileExtent,
-        .w = SpriteSheetTileExtent,
-        .h = SpriteSheetTileExtent,
+fn get_sprite_sheet_rect(position: [2]u8) c.SDL_FRect {
+    return c.SDL_FRect{
+        .x = @floatFromInt(position[0] * SpriteSheetTileExtent),
+        .y = @floatFromInt(position[1] * SpriteSheetTileExtent),
+        .w = @floatFromInt(SpriteSheetTileExtent),
+        .h = @floatFromInt(SpriteSheetTileExtent),
     };
 }
 
@@ -58,24 +58,24 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
     const width = game_state.extent[0] * SpriteScreenExtent;
     const height = game_state.extent[1] * SpriteScreenExtent;
 
-    if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
+    if (!c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS)) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
     defer c.SDL_Quit();
 
-    const window = c.SDL_CreateWindow("Minesweeper", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), c.SDL_WINDOW_SHOWN) orelse {
+    const window = c.SDL_CreateWindow("Minesweeper", @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 0) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
     defer c.SDL_DestroyWindow(window);
 
-    if (c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1") == c.SDL_FALSE) {
+    if (!c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1")) {
         c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
 
-    const ren = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) orelse {
+    const ren = c.SDL_CreateRenderer(window, null) orelse {
         c.SDL_Log("Unable to create renderer: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
@@ -88,13 +88,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
         return error.SDLInitializationFailed;
     };
 
-    defer c.SDL_FreeSurface(sprite_sheet_surface);
+    defer c.SDL_DestroySurface(sprite_sheet_surface);
 
     const sprite_sheet_texture = c.SDL_CreateTextureFromSurface(ren, sprite_sheet_surface) orelse {
         c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
     defer c.SDL_DestroyTexture(sprite_sheet_texture);
+
+    // FIXME Match SDL2 behavior
+    _ = c.SDL_SetTextureScaleMode(sprite_sheet_texture, c.SDL_SCALEMODE_NEAREST);
 
     var shouldExit = false;
 
@@ -106,26 +109,26 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
     }
 
     var gfx_event_index: usize = 0;
-    var last_frame_time_ms: u32 = c.SDL_GetTicks();
+    var last_frame_time_ms: u64 = c.SDL_GetTicks();
 
     while (!shouldExit) {
-        const current_frame_time_ms: u32 = c.SDL_GetTicks();
+        const current_frame_time_ms: u64 = c.SDL_GetTicks();
         const frame_delta_secs = @as(f32, @floatFromInt(current_frame_time_ms - last_frame_time_ms)) * 0.001;
 
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&sdlEvent) > 0) {
+        while (c.SDL_PollEvent(&sdlEvent)) {
             switch (sdlEvent.type) {
-                c.SDL_QUIT => {
+                c.SDL_EVENT_QUIT => {
                     shouldExit = true;
                 },
-                c.SDL_KEYDOWN => {
-                    if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE)
+                c.SDL_EVENT_KEY_DOWN => {
+                    if (sdlEvent.key.key == c.SDLK_ESCAPE)
                         shouldExit = true;
                 },
-                c.SDL_MOUSEBUTTONUP => {
-                    const x = @as(u32, @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent)));
-                    const y = @as(u32, @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent)));
+                c.SDL_EVENT_MOUSE_BUTTON_UP => {
+                    const x = @divTrunc(@as(u32, @intFromFloat(sdlEvent.button.x)), SpriteScreenExtent);
+                    const y = @divTrunc(@as(u32, @intFromFloat(sdlEvent.button.y)), SpriteScreenExtent);
                     const mouse_cell_index = game.cell_coords_to_flat_index(game_state.extent, .{ x, y });
 
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
@@ -139,19 +142,19 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
         }
 
         // Get current state of Control key
-        const is_ctrl_pressed = c.SDL_GetModState() & c.KMOD_CTRL != 0;
+        const is_ctrl_pressed = c.SDL_GetModState() & c.SDL_KMOD_CTRL != 0;
 
         const string = try std.fmt.allocPrintZ(allocator, "Minesweeper {d}x{d} with {d}/{d} mines", .{ game_state.extent[0], game_state.extent[1], game_state.flag_count, game_state.mine_count });
         defer allocator.free(string);
 
-        c.SDL_SetWindowTitle(window, string.ptr);
+        _ = c.SDL_SetWindowTitle(window, string.ptr);
 
-        var mouse_x: c_int = undefined;
-        var mouse_y: c_int = undefined;
+        var mouse_x: f32 = undefined;
+        var mouse_y: f32 = undefined;
         _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
 
-        const hovered_cell_x = @max(0, @min(game_state.extent[0], @as(u32, @intCast(@divTrunc(mouse_x, SpriteScreenExtent)))));
-        const hovered_cell_y = @max(0, @min(game_state.extent[1], @as(u32, @intCast(@divTrunc(mouse_y, SpriteScreenExtent)))));
+        const hovered_cell_x = @max(0, @min(game_state.extent[0], @divTrunc(@as(u32, @intFromFloat(mouse_x)), SpriteScreenExtent)));
+        const hovered_cell_y = @max(0, @min(game_state.extent[1], @divTrunc(@as(u32, @intFromFloat(mouse_y)), SpriteScreenExtent)));
         const hovered_cell_index = game.cell_coords_to_flat_index(game_state.extent, .{ hovered_cell_x, hovered_cell_y });
 
         for (gfx_board) |*cell| {
@@ -187,11 +190,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
             const gfx_cell = gfx_board[flat_index];
             const cell_coords = game.cell_flat_index_to_coords(game_state.extent, @intCast(flat_index));
 
-            const sprite_output_pos_rect = c.SDL_Rect{
-                .x = @intCast(cell_coords[0] * SpriteScreenExtent),
-                .y = @intCast(cell_coords[1] * SpriteScreenExtent),
-                .w = SpriteScreenExtent,
-                .h = SpriteScreenExtent,
+            const sprite_output_pos_rect = c.SDL_FRect{
+                .x = @floatFromInt(cell_coords[0] * SpriteScreenExtent),
+                .y = @floatFromInt(cell_coords[1] * SpriteScreenExtent),
+                .w = @floatFromInt(SpriteScreenExtent),
+                .h = @floatFromInt(SpriteScreenExtent),
             };
 
             const is_cheating = is_ctrl_pressed;
@@ -204,14 +207,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
                 const sprite_sheet_pos = get_tile_index(modified_cell, gfx_cell, game_state.is_ended);
                 const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
 
-                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_RenderTexture(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
             }
 
             if (is_cheating and cell.is_covered) {
                 const sprite_sheet_rect = get_sprite_sheet_rect(.{ 0, 1 });
 
                 _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @intFromFloat(128.0));
-                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_RenderTexture(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
                 _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
             }
 
@@ -221,12 +224,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
                 const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
 
                 _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @intFromFloat(alpha * 255.0));
-                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_RenderTexture(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
                 _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
             }
         }
 
-        c.SDL_RenderPresent(ren);
+        _ = c.SDL_RenderPresent(ren);
 
         last_frame_time_ms = current_frame_time_ms;
     }

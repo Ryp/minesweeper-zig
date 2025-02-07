@@ -18,8 +18,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize_mode,
     });
 
-    exe.linkLibC();
-    exe.linkSystemLibrary("SDL2");
+    const sdl_dep = b.dependency("sdl", .{
+        .target = target,
+        .optimize = optimize_mode,
+    });
+    const sdl_lib = sdl_dep.artifact("SDL3");
+
+    exe.root_module.linkLibrary(sdl_lib);
 
     b.installArtifact(exe);
 

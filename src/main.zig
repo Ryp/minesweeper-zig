@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 const assert = std.debug.assert;
 const native_endian = builtin.cpu.arch.endian();
 
-const sdl2 = @import("sdl2/sdl2_backend.zig");
 const game = @import("minesweeper/game.zig");
+const backend = @import("sdl_backend.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -29,5 +29,5 @@ pub fn main() !void {
     var game_state = try game.create_game_state(gpa.allocator(), .{ extent_x, extent_y }, mine_count, seed);
     defer game.destroy_game_state(gpa.allocator(), &game_state);
 
-    try sdl2.execute_main_loop(gpa.allocator(), &game_state);
+    try backend.execute_main_loop(gpa.allocator(), &game_state);
 }
