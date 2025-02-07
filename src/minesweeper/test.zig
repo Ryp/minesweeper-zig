@@ -3,8 +3,8 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 const game = @import("game.zig");
-const @"u32_2" = game.u32_2;
-const @"u16_2" = game.u16_2;
+const u32_2 = game.u32_2;
+const u16_2 = game.u16_2;
 const event = @import("event.zig");
 
 const test_seed: u64 = 0xC0FFEE42DEADBEEF;
@@ -66,7 +66,7 @@ test "Big uncover" {
 
     game.uncover(&game_state, start_pos);
 
-    try expect(game_state.event_history[0] == event.GameEventTag.discover_many);
+    try expect(game_state.event_history[0] == .discover_many);
 }
 
 test "Number uncover" {
@@ -84,7 +84,7 @@ test "Number uncover" {
 
     try expectEqual(game.cell_at(&game_state, .{ 2, 1 }).is_covered, false);
     try expectEqual(game.cell_at(&game_state, .{ 3, 1 }).is_covered, false);
-    try expect(game_state.event_history[0] == event.GameEventTag.discover_many);
-    try expect(game_state.event_history[1] == event.GameEventTag.discover_number);
+    try expect(game_state.event_history[0] == .discover_many);
+    try expect(game_state.event_history[1] == .discover_number);
     try expectEqual(game_state.is_ended, false);
 }
