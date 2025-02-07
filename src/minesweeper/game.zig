@@ -365,6 +365,7 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
     var candidate_count: u32 = 0;
     var flag_count: u32 = 0;
 
+    // Count covered cells
     for (NeighborhoodOffsetTable) |offset| {
         const target = @as(i16_2, @intCast(number_pos)) + offset;
 
@@ -375,7 +376,10 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
         const utarget = @as(u16_2, @intCast(target));
         const target_cell = cell_at(game, utarget);
 
-        assert(target_cell.is_covered or target_cell.marking == .None);
+        // Only count covered cells
+        if (!target_cell.is_covered) {
+            continue;
+        }
 
         if (target_cell.marking == .Flag) {
             flag_count += 1;
@@ -386,9 +390,7 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
     }
 
     if (number_cell.mine_neighbors == flag_count) {
-        var candidate_index: u32 = 0;
-        while (candidate_index < candidate_count) {
-            const candidate_pos = candidates[candidate_index];
+        for (candidates[0..candidate_count]) |candidate_pos| {
             var cell = cell_at(game, candidate_pos);
 
             assert(cell.marking != .Flag);
@@ -402,8 +404,6 @@ fn uncover_from_number(game: *GameState, number_pos: u16_2, number_cell: *CellSt
 
             game.children_array[game.children_array_index] = candidate_pos;
             game.children_array_index += 1;
-
-            candidate_index += 1;
         }
     }
 }
