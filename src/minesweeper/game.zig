@@ -2,11 +2,10 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const event = @import("event.zig");
-const GameEvent = event.GameEvent;
-const GameResult = event.GameResult;
 
-pub const u32_2 = @Vector(2, u32);
-pub const i32_2 = @Vector(2, i32);
+pub const DefaultExtentX = 25;
+pub const DefaultExtentY = 20;
+pub const DefaultMineCount = 60;
 
 const BoardExtentMin = u32_2{ 5, 5 };
 const BoardExtentMax = u32_2{ 1024, 1024 };
@@ -27,6 +26,25 @@ const NeighborhoodOffsetTableWithCenter = [9]i32_2{
 
 const NeighborhoodOffsetTable = NeighborhoodOffsetTableWithCenter[0..8];
 
+pub const GameState = struct {
+    extent: u32_2,
+    mine_count: u32,
+    board: []CellState,
+    rng: std.Random.Xoroshiro128, // Hardcode PRNG type for forward compatibility
+    is_first_move: bool = true,
+    is_ended: bool = false,
+    flag_count: u32 = 0,
+
+    // Storage for game events
+    event_history: []event.GameEvent,
+    event_history_index: usize = 0,
+    children_array: []u32,
+    children_array_index: usize = 0,
+};
+
+pub const u32_2 = @Vector(2, u32);
+const i32_2 = @Vector(2, i32);
+
 pub const Marking = enum {
     None,
     Flag,
@@ -38,22 +56,6 @@ pub const CellState = struct {
     is_covered: bool = true,
     marking: Marking = .None,
     mine_neighbors: u4 = 0,
-};
-
-pub const GameState = struct {
-    extent: u32_2,
-    mine_count: u32,
-    board: []CellState,
-    rng: std.Random.Xoroshiro128, // Hardcode PRNG type for forward compatibility
-    is_first_move: bool = true,
-    is_ended: bool = false,
-    flag_count: u32 = 0,
-
-    // Storage for game events
-    event_history: []GameEvent,
-    event_history_index: usize = 0,
-    children_array: []u32,
-    children_array_index: usize = 0,
 };
 
 pub fn cell_coords_to_flat_index(extent: u32_2, cell_coords: u32_2) u32 {
@@ -101,7 +103,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, mine_count
     // Allocate array to hold events
     const max_events = cell_count + 2000;
 
-    const event_history = try allocator.alloc(GameEvent, max_events);
+    const event_history = try allocator.alloc(event.GameEvent, max_events);
     errdefer allocator.free(event_history);
 
     // Allocate array to hold cells discovered in events
@@ -223,7 +225,7 @@ fn check_win_conditions(game: *GameState) void {
 
             event.allocate_new_event(game).* = .{
                 .game_end = .{
-                    .result = GameResult.Lose,
+                    .result = .Lose,
                     .exploded_mines = game.children_array[start_children..end_children],
                 },
             };
@@ -246,7 +248,7 @@ fn check_win_conditions(game: *GameState) void {
 
         event.allocate_new_event(game).* = .{
             .game_end = .{
-                .result = GameResult.Win,
+                .result = .Win,
                 .exploded_mines = game.children_array[0..0],
             },
         };
