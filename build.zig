@@ -26,6 +26,8 @@ pub fn build(b: *std.Build) void {
 
     exe.root_module.linkLibrary(sdl_lib);
 
+    exe.root_module.addAnonymousImport("sprite_sheet", .{ .root_source_file = b.path("res/tile.bmp") });
+
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);

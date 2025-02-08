@@ -81,13 +81,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *game.GameSta
     };
     defer c.SDL_DestroyRenderer(ren);
 
-    // Create sprite sheet
-    // Using relative path for now
-    const sprite_sheet_surface = c.SDL_LoadBMP("res/tile.bmp") orelse {
+    // Create sprite sheet texture
+    const sprite_sheet_buffer = @embedFile("sprite_sheet");
+    const sprite_sheet_io = c.SDL_IOFromConstMem(sprite_sheet_buffer, sprite_sheet_buffer.len);
+    const sprite_sheet_surface = c.SDL_LoadBMP_IO(sprite_sheet_io, true) orelse {
         c.SDL_Log("Unable to create BMP surface from file: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
-
     defer c.SDL_DestroySurface(sprite_sheet_surface);
 
     const sprite_sheet_texture = c.SDL_CreateTextureFromSurface(ren, sprite_sheet_surface) orelse {
